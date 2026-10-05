@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,16 +43,22 @@ import androidx.compose.ui.unit.sp
 import com.aicode.R
 import com.aicode.core.theme.Radius
 import com.aicode.core.theme.Spacing
+import com.aicode.core.ui.GlassSurface
 import com.aicode.feature.agent.domain.model.TodoItem
 import com.aicode.feature.agent.domain.model.TodoStatus
 import com.aicode.core.ui.ExpandableChevronIcon
+import com.styropyr0.prismal.sources.PrismalGlassLayer
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.CheckSquare
 import compose.icons.feathericons.ChevronDown
 import compose.icons.feathericons.ChevronUp
 
 /**
- * 位于输入框上方的待办任务常驻面板：
+ * 待办任务常驻面板（两种形态）：
+ * - 消息栏上方：内嵌在输入区列里的普通卡片（默认，改造前既有行为）；
+ * - 标题栏下方：悬浮玻璃浮层（传入 [glassBackdrop] 启用），与标题栏共用同一层背景采样。
+ *
+ * 共性：
  * - 仅在当前会话有待办项时显示；
  * - 支持折叠为单行紧凑摘要与展开查看完整列表；
  * - 记住各会话的展开/折叠状态；
@@ -63,7 +70,13 @@ fun TodoDashboardBar(
     sessionId: String,
     modifier: Modifier = Modifier,
     forceCollapse: Boolean = false,
-    onExpandedChange: (Boolean) -> Unit = {}
+    onExpandedChange: (Boolean) -> Unit = {},
+    /** 背景采样层；非 null 时容器切换为液态玻璃（标题栏下方浮层形态）。 */
+    glassBackdrop: PrismalGlassLayer? = null,
+    /** 背景亮度（0..1），玻璃模式专用。 */
+    glassLuminance: () -> Float = { 0.5f },
+    /** 玻璃上的前景色：随背景亮度自适应；Unspecified 时退回色板色。 */
+    glassContentColor: Color = Color.Unspecified
 ) {
     if (items.isEmpty()) return
 
@@ -79,17 +92,19 @@ fun TodoDashboardBar(
     val completedCount = items.count { it.status == TodoStatus.COMPLETED }
     val inProgressItem = items.firstOrNull { it.status == TodoStatus.IN_PROGRESS }
 
-    val cardBgColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val hasGlass = glassBackdrop != null
+    val titleColor = if (hasGlass && glassContentColor != Color.Unspecified) {
+        glassContentColor
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val secondaryColor = if (hasGlass && glassContentColor != Color.Unspecified) {
+        glassContentColor.copy(alpha = 0.72f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(bottom = Spacing.xs),
-        shape = RoundedCornerShape(Radius.lg),
-        color = cardBgColor,
-        border = BorderStroke(1.dp, borderColor)
-    ) {
+    val body: @Composable () -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -115,7 +130,7 @@ fun TodoDashboardBar(
                     text = stringResource(R.string.todo_dashboard_title),
                     style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = titleColor
                 )
                 Spacer(Modifier.width(Spacing.sm))
 
@@ -135,7 +150,7 @@ fun TodoDashboardBar(
                             stringResource(R.string.todo_dashboard_progress, completedCount, totalCount)
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = secondaryColor,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -145,7 +160,7 @@ fun TodoDashboardBar(
                     Text(
                         text = inProgressItem.subject,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = secondaryColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -161,7 +176,7 @@ fun TodoDashboardBar(
                     } else {
                         stringResource(R.string.common_expand)
                     },
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = secondaryColor,
                     size = 16.dp
                 )
             }
@@ -187,6 +202,34 @@ fun TodoDashboardBar(
                     }
                 }
             }
+        }
+    }
+
+    if (glassBackdrop != null) {
+        // 标题栏下方浮层：液态玻璃容器，与标题栏同圆角、同采样层
+        GlassSurface(
+            backdrop = glassBackdrop,
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(bottom = Spacing.xs),
+            cornerRadius = 20.dp,
+            blurRadius = 8.dp,
+            tintAlpha = 0.10f,
+            luminance = glassLuminance
+        ) {
+            body()
+        }
+    } else {
+        // 消息栏上方：普通卡片（保持改造前观感）
+        Surface(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(bottom = Spacing.xs),
+            shape = RoundedCornerShape(Radius.lg),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            body()
         }
     }
 }

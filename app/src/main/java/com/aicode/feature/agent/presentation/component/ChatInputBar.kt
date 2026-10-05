@@ -365,7 +365,7 @@ internal fun ChatInputBar(
                 backdrop = glassBackdrop,
                 modifier = Modifier.fillMaxWidth(),
                 cornerRadius = Radius.lg,
-                blurRadius = 14.dp,
+                blurRadius = 12.dp,
                 tintAlpha = 0.14f,
                 luminance = glassLuminance
             ) {

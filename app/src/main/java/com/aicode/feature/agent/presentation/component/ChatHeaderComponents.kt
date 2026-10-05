@@ -57,6 +57,9 @@ internal const val CHAT_HEADER_HEIGHT_DP = 52
 /** 远程模式额外多一行「连接状态 + token 统计」时的附加高度。 */
 internal const val CHAT_HEADER_CONNECTION_ROW_DP = 28
 
+/** 标题栏下方待办浮层收起态的消息列表预留高度：单行摘要约 40dp + 与消息流间距 8dp。 */
+internal const val CHAT_TODO_BAR_RESERVE_DP = 48
+
 /**
  * 顶栏：悬浮玻璃层。
  *

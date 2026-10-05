@@ -591,12 +591,16 @@ fun AIChatPanel(
     val pendingPermission by viewModel.pendingToolPermission.collectAsStateWithLifecycle()
     val pendingPermissionSessionTitle by viewModel.pendingToolPermissionSessionTitle.collectAsStateWithLifecycle()
     val pendingQuestion by viewModel.pendingUserQuestion.collectAsStateWithLifecycle()
+    // 提前收集：标题栏下方的待办浮层需要在计划审批弹窗出现时联动收起（原在浮动层内收集，太靠后）
+    val planApproval by viewModel.pendingPlanApproval.collectAsStateWithLifecycle()
     val currentTodoItems by viewModel.currentSessionTodoItems.collectAsStateWithLifecycle()
     // 任务待办显示位置：标题栏下方 / 消息栏上方（默认，改造前既有行为）/ 关闭
     val todoDisplayPosition = settingsViewModel?.todoDisplayPosition?.collectAsStateWithLifecycle()?.value
         ?: TodoDisplayPosition.ABOVE_INPUT_BAR
     val todoBelowTitleBar = todoDisplayPosition == TodoDisplayPosition.BELOW_TITLE_BAR
     val todoAboveInputBar = todoDisplayPosition == TodoDisplayPosition.ABOVE_INPUT_BAR
+    // 标题栏下方待办浮层是否实际可见：决定消息列表首屏要为它多预留多少高度
+    val todoOverlayVisible = todoBelowTitleBar && currentTodoItems.isNotEmpty()
     val queuedRequests by viewModel.queuedRequests.collectAsStateWithLifecycle()
     val targetRewindMessageId by viewModel.targetRewindMessageId.collectAsStateWithLifecycle()
     val providers = (settingsViewModel?.providers?.collectAsStateWithLifecycle()?.value ?: emptyList()).filter { it.isEnabled }
@@ -1389,22 +1393,6 @@ fun AIChatPanel(
             // 唯一一处 backdrop 采样：标题栏 / 输入区 / 待办浮层的玻璃都读这一层，
             // 避免同时存在多个全屏 backdrop capture。
             Column(modifier = Modifier.fillMaxSize().glassBackdrop(glassLayer)) {
-            // 任务待办（显示位置 = 标题栏下方）：紧贴标题栏之下、消息流之前，占一行高度。
-            // 默认只显示「x/y 已完成」与当前进行中任务，展开后由本组件自身撑高。
-            if (todoBelowTitleBar && currentTodoItems.isNotEmpty()) {
-                TodoDashboardBar(
-                    items = currentTodoItems,
-                    sessionId = currentSessionId.orEmpty(),
-                    forceCollapse = dashboardCollapseActive,
-                    onExpandedChange = { todoExpanded = it },
-                    modifier = Modifier.padding(
-                        start = Spacing.lg,
-                        end = Spacing.lg,
-                        top = topReserveDp,
-                        bottom = Spacing.xs
-                    )
-                )
-            }
             Box(modifier = Modifier.weight(1f)) {
                 if (!messagesReady) {
                     // 远程模式连接未就绪时显示连接状态占位，避免空白或旧工作区记录闪烁
@@ -1447,8 +1435,10 @@ fun AIChatPanel(
                         contentPadding = PaddingValues(
                             start = Spacing.lg,
                             end = Spacing.lg,
-                            // 首屏把第一条消息让到悬浮标题栏下方；滚动后内容从玻璃后面穿过
-                            top = topReserveDp + Spacing.md,
+                            // 首屏把第一条消息让到悬浮标题栏（与标题栏下方待办浮层）之下；
+                            // 滚动后内容从玻璃后面穿过
+                            top = topReserveDp + Spacing.md +
+                                (if (todoOverlayVisible) CHAT_TODO_BAR_RESERVE_DP.dp else 0.dp),
                             bottom = with(LocalDensity.current) { inputBarReservePx.toDp() }
                         )
                     ) {
@@ -1595,6 +1585,30 @@ fun AIChatPanel(
             }
             } // 内容层结束
 
+            // 任务待办（显示位置 = 标题栏下方）：与标题栏同为「悬浮玻璃层」，同宽、同水平边距，
+            // 紧贴标题栏之下。默认单行摘要（x/y 完成 + 进行中任务），点击展开后作为浮层盖在消息之上，
+            // 不再占用消息流的布局高度（旧版内嵌在内容层里，既撑不开玻璃、宽度和标题栏也对不齐）。
+            if (todoBelowTitleBar && currentTodoItems.isNotEmpty()) {
+                TodoDashboardBar(
+                    items = currentTodoItems,
+                    sessionId = currentSessionId.orEmpty(),
+                    // 互斥收起只收「别的」：授权/询问/计划面板出现或键盘弹起时收起待办。
+                    // 绝不能把自身 todoExpanded 算进 forceCollapse——那会形成
+                    // 「展开→上报→强制收起→复位→再展开」的死循环（症状：展不开、回页面时疯狂闪烁）。
+                    forceCollapse = pendingPermission != null || pendingQuestion != null ||
+                        planApproval != null || imeVisible,
+                    onExpandedChange = { todoExpanded = it },
+                    glassBackdrop = glassLayer,
+                    glassLuminance = { glassLuminance.luminance },
+                    glassContentColor = glassLuminance.contentColor,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .widthIn(max = readableContentMaxWidth())
+                        .padding(start = Spacing.xs, end = Spacing.xs, top = topReserveDp)
+                )
+            }
+
             // 悬浮玻璃标题栏：不再是 Scaffold 的 topBar（那样会永久扣掉一块高度），
             // 而是叠在消息列表之上；列表只用 contentPadding 预留首屏空间，滚动时内容穿过玻璃。
             ChatHeader(
@@ -1672,7 +1686,6 @@ fun AIChatPanel(
                 }
             }
 
-            val planApproval by viewModel.pendingPlanApproval.collectAsStateWithLifecycle()
             val planForPanel = rememberLastNonNull(planApproval)
             AnimatedVisibility(
                 visible = planApproval != null,

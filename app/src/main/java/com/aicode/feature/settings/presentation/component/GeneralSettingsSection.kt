@@ -154,24 +154,6 @@ internal fun GeneralSettingsSection(
             )
         }
 
-        // 工具：AI 侧工具能力在界面上的呈现方式（目前只有任务待办的显示位置）
-        SettingsGroupHeader(text = stringResource(R.string.settings_general_tools))
-        SettingsGroup {
-            SettingsRow(
-                icon = null,
-                title = stringResource(R.string.settings_todo_display_position),
-                subtitle = stringResource(R.string.settings_todo_display_position_desc),
-                onClick = { showTodoPositionSheet = true },
-                trailing = {
-                    Text(
-                        text = stringResource(todoDisplayPosition.labelRes()),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.semanticColors.subtleText
-                    )
-                }
-            )
-        }
-
         SettingsGroupHeader(text = stringResource(R.string.settings_general_network))
         SettingsGroup {
             SettingsRow(
@@ -219,6 +201,20 @@ internal fun GeneralSettingsSection(
 
         SettingsGroupHeader(text = stringResource(R.string.settings_general_tools))
         SettingsGroup {
+            SettingsRow(
+                icon = null,
+                title = stringResource(R.string.settings_todo_display_position),
+                subtitle = stringResource(R.string.settings_todo_display_position_desc),
+                onClick = { showTodoPositionSheet = true },
+                trailing = {
+                    Text(
+                        text = stringResource(todoDisplayPosition.labelRes()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.semanticColors.subtleText
+                    )
+                }
+            )
+            SettingsDivider()
             SettingsRow(
                 icon = null,
                 title = stringResource(R.string.settings_sendfile_max_size),
