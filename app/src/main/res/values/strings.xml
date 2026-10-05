@@ -22,6 +22,15 @@
     <string name="settings_startup_session_recent_desc">直接进入最近更新的会话</string>
     <string name="settings_delete_external_workspace_sessions">删除外部工作区聊天记录</string>
     <string name="settings_delete_external_workspace_sessions_desc">移除外部本地工作区时，一并删除该工作区的聊天记录</string>
+    <string name="settings_general_tools">工具</string>
+    <string name="settings_todo_display_position">任务待办显示位置</string>
+    <string name="settings_todo_display_position_desc">AI 任务清单在聊天页的显示位置</string>
+    <string name="settings_todo_position_below_title">标题栏下方</string>
+    <string name="settings_todo_position_below_title_desc">紧贴顶部标题栏，进入消息列表前占一行</string>
+    <string name="settings_todo_position_above_input">消息栏上方</string>
+    <string name="settings_todo_position_above_input_desc">紧贴底部输入框上方显示</string>
+    <string name="settings_todo_position_off">关闭</string>
+    <string name="settings_todo_position_off_desc">不在聊天页显示，AI 仍会维护任务清单</string>
     <string name="settings_general_network">网络</string>
     <string name="settings_first_byte_timeout">首字节超时</string>
     <string name="settings_first_byte_timeout_desc">等待首个响应块的最长时间</string>
@@ -41,7 +50,6 @@
     <string name="settings_compaction_threshold_desc">上下文占用达到窗口的该比例时自动压缩</string>
     <string name="settings_percent_value">%1$d%%</string>
     <string name="settings_compaction_threshold_input_hint">填 1-100 的整数百分比</string>
-    <string name="settings_general_tools">工具</string>
     <string name="settings_sendfile_max_size">sendFile 单文件上限</string>
     <string name="settings_sendfile_max_size_desc">单个文件大小上限，超过则整批发送失败</string>
     <string name="settings_mb_value">%1$d MB</string>

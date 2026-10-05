@@ -76,6 +76,7 @@ import com.aicode.feature.settings.data.repository.ProxyConfig
 import com.aicode.feature.settings.data.repository.ProxySettingsRepository
 import com.aicode.feature.settings.data.repository.ScreenOnSettingsRepository
 import com.aicode.feature.settings.data.repository.StartupSessionMode
+import com.aicode.feature.settings.data.repository.TodoDisplayPosition
 import com.aicode.feature.settings.data.repository.ThemeSettingsRepository
 import com.aicode.feature.settings.data.repository.ToolSafetySettingsRepository
 import com.aicode.feature.settings.data.repository.BackgroundSettingsRepository
@@ -526,6 +527,9 @@ class SettingsViewModel @Inject constructor(
     private val _deleteExternalWorkspaceSessions = MutableStateFlow(false)
     val deleteExternalWorkspaceSessions: StateFlow<Boolean> = _deleteExternalWorkspaceSessions.asStateFlow()
 
+    private val _todoDisplayPosition = MutableStateFlow(TodoDisplayPosition.ABOVE_INPUT_BAR)
+    val todoDisplayPosition: StateFlow<TodoDisplayPosition> = _todoDisplayPosition.asStateFlow()
+
     private val _themeMode = MutableStateFlow(AppThemeMode.AUTO)
     val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
 
@@ -907,6 +911,12 @@ class SettingsViewModel @Inject constructor(
             launch {
                 generalSettingsRepository.deleteExternalWorkspaceSessionsFlow.collectLatest {
                     _deleteExternalWorkspaceSessions.value = it
+                }
+            }
+
+            launch {
+                generalSettingsRepository.todoDisplayPositionFlow.collectLatest {
+                    _todoDisplayPosition.value = it
                 }
             }
 
@@ -1612,6 +1622,13 @@ class SettingsViewModel @Inject constructor(
     fun setAutoRemoveStaleModels(enabled: Boolean) {
         viewModelScope.launch {
             generalSettingsRepository.setAutoRemoveStaleModels(enabled)
+        }
+    }
+
+    /** 聊天页任务待办区域的显示位置（标题栏下方 / 消息栏上方 / 关闭）。 */
+    fun setTodoDisplayPosition(position: TodoDisplayPosition) {
+        viewModelScope.launch {
+            generalSettingsRepository.setTodoDisplayPosition(position)
         }
     }
 

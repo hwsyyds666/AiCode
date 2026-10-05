@@ -87,11 +87,13 @@ val syncAiDocs = tasks.register<Sync>("syncAiDocs") {
 
 android {
     namespace = "com.aicode"
-    compileSdk = 36
-    // 注意：不要再往下调 build-tools。AGP 在 compileSdk 36 下强制最低 35.0.0，指定更低版本会被
-    // 静默忽略（日志里提示 "is ignored because it is below the minimum supported version"）。
-    // 35.0.0 的 aidl 有个副作用（见文件末尾 stripAidlCommandHeader 的注释），已在下方绕过。
-    buildToolsVersion = "35.0.0"
+    // compileSdk 36→37：PrismalAGSL（Liquid Glass）的 aar-metadata 声明 minCompileSdk=37，
+    // 低于此值 AGP 会在依赖解析/合并资源阶段报 "requires compileSdk 37"。SDK android-37.0 已装。
+    // 注意：targetSdk 仍锁 28（原因见 defaultConfig），compileSdk 与之独立，不冲突。
+    compileSdk = 37
+    // 同步升 build-tools：compileSdk 37 下 AGP 强制最低 36.0.0，指定更低会被静默忽略。
+    // 35.0.0 的 aidl 副作用（见文件末尾注释）在 36.0.0 上同样已绕过。
+    buildToolsVersion = "36.0.0"
 
     signingConfigs {
         create("release") {
@@ -315,6 +317,23 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.animation:animation")
+
+    // Liquid Glass（顶部标题栏 / 底部输入区 / 待办浮层 / 弹窗）。
+    // 坐标与 JitPack 一致（com.github.styropyr0:PrismalAGSL:v1.0.4），但实际从
+    // <root>/prismalrepo 本地 Maven 仓库解析——JitPack 是按需现编仓库，Gradle 直连曾偶发
+    // 解析失败（同一 URL curl 可正常取回 AAR）。本地镜像去掉了上游 POM 中版本缺失的
+    // Compose 依赖与会冲突的 compose-bom:2026.06.01，Compose 版本统一由上面的 BOM 决定。
+    // 注意坐标：README 写的四段式 com.github.styropyr0:PrismalAGSL:Prismal:TAG 是错的，
+    // Gradle 只认三段；真实产物为 groupId=com.github.styropyr0 / artifactId=PrismalAGSL。
+    // 兼容性：aar-metadata 声明 minCompileSdk=37（故 compileSdk 已升 37）、minSdk 25（我们 26）；
+    // classes 的 Kotlin 元数据为 mv=[2,2,0]，本项目 Kotlin 2.2.21 可直接读取；
+    // 库自带三档降级：API 25-30 磨砂 / 31-32 RenderEffect 模糊 / 33+ 完整 AGSL 折射，
+    // 我们不在代码里判断 API 级别，由库自行降级。
+    implementation("com.github.styropyr0:PrismalAGSL:v1.0.4")
+    // AAR 的 AndroidManifest 声明了 androidx.startup.InitializationProvider，
+    // AGSL shader（assets/agsl/*.agsl）由 PrismalAgslInitializer 在启动时加载，缺此依赖会
+    // 在启动期抛 ClassNotFoundException。上游本地 POM 未声明，故在此显式补上。
+    implementation("androidx.startup:startup-runtime:1.2.0")
 
     // Vico 图表（Token 统计趋势图）
     implementation("com.patrykandpatrick.vico:compose-m3:2.4.4")

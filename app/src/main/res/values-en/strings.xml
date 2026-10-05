@@ -22,6 +22,15 @@
     <string name="settings_startup_session_recent_desc">Open the most recently updated session</string>
     <string name="settings_delete_external_workspace_sessions">Delete external workspace chats</string>
     <string name="settings_delete_external_workspace_sessions_desc">Also delete a workspace\'s chats when an external local workspace is removed</string>
+    <string name="settings_general_tools">Tools</string>
+    <string name="settings_todo_display_position">Task list position</string>
+    <string name="settings_todo_display_position_desc">Where the AI task list appears on the chat page</string>
+    <string name="settings_todo_position_below_title">Below title bar</string>
+    <string name="settings_todo_position_below_title_desc">Right under the top bar, before the message list</string>
+    <string name="settings_todo_position_above_input">Above input bar</string>
+    <string name="settings_todo_position_above_input_desc">Right above the bottom input area</string>
+    <string name="settings_todo_position_off">Hidden</string>
+    <string name="settings_todo_position_off_desc">Not shown on the chat page; the AI still maintains the list</string>
     <string name="settings_general_network">Network</string>
     <string name="settings_first_byte_timeout">First byte timeout</string>
     <string name="settings_first_byte_timeout_desc">Max wait for the first response chunk</string>
@@ -41,7 +50,6 @@
     <string name="settings_compaction_threshold_desc">Compact context once it reaches this share of the window</string>
     <string name="settings_percent_value">%1$d%%</string>
     <string name="settings_compaction_threshold_input_hint">Integer percentage between 1 and 100</string>
-    <string name="settings_general_tools">Tools</string>
     <string name="settings_sendfile_max_size">sendFile max file size</string>
     <string name="settings_sendfile_max_size_desc">Per-file size cap; exceeding it fails the whole batch</string>
     <string name="settings_mb_value">%1$d MB</string>

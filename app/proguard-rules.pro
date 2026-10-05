@@ -129,3 +129,15 @@
 # MacroInfo.macro 保持 null，渲染时 Method.invoke NPE——release 包上所有带 \begin / 自定义宏的
 # 公式空白，debug 不混淆故正常。整包保留类名与方法名，避免再被 interface 去虚化等优化破坏。
 -keep class org.scilab.forge.jlatexmath.** { *; }
+
+# ---- PrismalAGSL（Liquid Glass）----
+# 两个保留理由：
+# 1) AAR 的 AndroidManifest 声明 androidx.startup.InitializationProvider +
+#    meta-data com.styropyr0.prismal.internal.PrismalAgslInitializer。
+#    该 initializer 只被 manifest 字符串引用，R8 看不到代码引用会将其移除/重命名，
+#    启动期按类名反射查找即 ClassNotFoundException（AGSL shader 资源也就不会加载）。
+# 2) 库内部大量使用 Compose 的 lambda 化配置（shape/effects/specular/depth 都是
+#    Function0/Function1），并有 PrismalShaderCache 等按约定工作的实现，
+#    整体保留可避免逐条补全 keep 规则带来的漏网。
+-keep class com.styropyr0.prismal.** { *; }
+-keep class androidx.startup.** { *; }

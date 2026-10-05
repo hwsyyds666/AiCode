@@ -173,6 +173,9 @@ internal fun ChatInputBar(
     onRefreshDashboardByButton: () -> Unit = {},
     onDashboardExpandedChange: (Boolean) -> Unit = {},
     todoItems: List<TodoItem> = emptyList(),
+    /** 玻璃背景采样层（与聊天页标题栏共用同一层）；null 时降级为普通容器。 */
+    glassBackdrop: com.styropyr0.prismal.sources.PrismalGlassLayer? = null,
+    glassLuminance: () -> Float = { 0.5f },
     sessionId: String = "",
     onTodoExpandedChange: (Boolean) -> Unit = {},
     forceCollapseDashboard: Boolean = false,
@@ -356,16 +359,19 @@ internal fun ChatInputBar(
                 )
             }
 
+            // 工具栏与输入框合并成一个统一的玻璃 Surface（原来背景/描边就在这层）：
+            // 不再有多张彼此独立的卡片，模式 / 模型 / 附件 / 发送与文本域同属一块玻璃。
+            com.aicode.core.ui.GlassSurface(
+                backdrop = glassBackdrop,
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = Radius.lg,
+                blurRadius = 14.dp,
+                tintAlpha = 0.14f,
+                luminance = glassLuminance
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(Radius.lg))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.98f))
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant,
-                        RoundedCornerShape(Radius.lg)
-                    )
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
             ) {
                 PendingAttachmentPreviewList(
@@ -523,6 +529,7 @@ internal fun ChatInputBar(
                     )
                     SendButton(canSend = canSend, hasContent = hasContent, isBusy = isBusy, tokenProgress = tokenProgress, tokenEstimated = tokenEstimated, onSend = onSend, onStop = onStop)
                 }
+            }
             }
         }
         }

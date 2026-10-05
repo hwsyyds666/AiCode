@@ -15,6 +15,23 @@ import javax.inject.Singleton
 
 private val Context.generalDataStore by preferencesDataStore(name = "general_prefs")
 
+/**
+ * 聊天页「任务待办」区域的显示位置。
+ *
+ * 待办由 AI 通过 TodoTool 维护，UI 上是一个可折叠的轻量条：默认只显示
+ * 「x/y 已完成」和当前进行中的任务，点击展开完整列表。本枚举决定它挂在聊天页的哪一处。
+ */
+enum class TodoDisplayPosition {
+    /** 标题栏下方：紧贴顶部悬浮标题栏之下，进入消息流之前占一行高度。 */
+    BELOW_TITLE_BAR,
+
+    /** 消息栏上方：紧贴底部输入区之上（改造前既有行为，默认保持）。 */
+    ABOVE_INPUT_BAR,
+
+    /** 关闭：不在聊天页渲染待办区域（仍可在会话内被 AI 维护，仅不展示）。 */
+    OFF
+}
+
 /** App 启动（含切换工作区）时进入哪个会话。 */
 enum class StartupSessionMode {
     /** 新开会话：复用当前工作区里还没发过消息的空会话，否则新建。 */
@@ -48,6 +65,7 @@ class GeneralSettingsRepository @Inject constructor(
         val COMPACTION_THRESHOLD_PERCENT_KEY = intPreferencesKey("compaction_threshold_percent")
         val SENDFILE_MAX_SIZE_MB_KEY = intPreferencesKey("sendfile_max_size_mb")
         val DELETE_EXTERNAL_WORKSPACE_SESSIONS_KEY = booleanPreferencesKey("delete_external_workspace_sessions")
+        val TODO_DISPLAY_POSITION_KEY = stringPreferencesKey("todo_display_position")
         /** 「提示词」页使用说明公告已展示内容的哈希；无值或与当前内容哈希不一致时重新弹出。 */
         val PROMPTS_ANNOUNCEMENT_SHOWN_HASH_KEY = stringPreferencesKey("prompts_announcement_shown_hash")
 
@@ -209,6 +227,30 @@ class GeneralSettingsRepository @Inject constructor(
 
     /** 移除外部工作区前读取一次该偏好。 */
     suspend fun deleteExternalWorkspaceSessions(): Boolean = deleteExternalWorkspaceSessionsFlow.first()
+
+    /**
+     * 任务待办显示位置；未设置或值无法识别时回退到 [TodoDisplayPosition.ABOVE_INPUT_BAR]，
+     * 即改造前的既有位置（输入栏上方），保证老用户升级后行为不变。
+     */
+    val todoDisplayPositionFlow: Flow<TodoDisplayPosition> = context.generalDataStore.data.map { prefs ->
+        TodoDisplayPosition.entries.firstOrNull { it.name == prefs[TODO_DISPLAY_POSITION_KEY] }
+            ?: TodoDisplayPosition.ABOVE_INPUT_BAR
+    }
+
+    suspend fun setTodoDisplayPosition(position: TodoDisplayPosition) {
+        context.generalDataStore.edit { it[TODO_DISPLAY_POSITION_KEY] = position.name }
+    }
+
+    /** 备份快照：任务待办显示位置名。 */
+    suspend fun todoDisplayPositionSnapshot(): String = todoDisplayPositionFlow.first().name
+
+    /** 从备份还原任务待办显示位置；旧备份无此字段（null）或值无法识别时回退输入栏上方。 */
+    suspend fun restoreTodoDisplayPosition(position: String?) {
+        setTodoDisplayPosition(
+            TodoDisplayPosition.entries.firstOrNull { it.name == position }
+                ?: TodoDisplayPosition.ABOVE_INPUT_BAR
+        )
+    }
 
     /** 「提示词」页公告已展示内容的哈希；无值表示从未展示过。 */
     val promptsAnnouncementShownHashFlow: Flow<String?> = context.generalDataStore.data.map { prefs ->

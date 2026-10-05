@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -91,6 +92,10 @@ import com.aicode.feature.agent.presentation.QueuedRequest
 import com.aicode.feature.agent.presentation.hasVisibleContent
 import com.aicode.feature.onboarding.domain.OnboardingStep
 import com.aicode.feature.onboarding.presentation.onboardingTarget
+import com.aicode.feature.settings.data.repository.TodoDisplayPosition
+import com.aicode.core.ui.glassBackdrop
+import com.aicode.core.ui.rememberChatGlassLayer
+import com.aicode.core.ui.rememberGlassLuminance
 import com.aicode.feature.settings.presentation.SettingsViewModel
 import com.aicode.feature.settings.domain.model.DashboardContext
 import com.aicode.feature.settings.domain.model.ProviderDashboardState
@@ -587,6 +592,11 @@ fun AIChatPanel(
     val pendingPermissionSessionTitle by viewModel.pendingToolPermissionSessionTitle.collectAsStateWithLifecycle()
     val pendingQuestion by viewModel.pendingUserQuestion.collectAsStateWithLifecycle()
     val currentTodoItems by viewModel.currentSessionTodoItems.collectAsStateWithLifecycle()
+    // 任务待办显示位置：标题栏下方 / 消息栏上方（默认，改造前既有行为）/ 关闭
+    val todoDisplayPosition = settingsViewModel?.todoDisplayPosition?.collectAsStateWithLifecycle()?.value
+        ?: TodoDisplayPosition.ABOVE_INPUT_BAR
+    val todoBelowTitleBar = todoDisplayPosition == TodoDisplayPosition.BELOW_TITLE_BAR
+    val todoAboveInputBar = todoDisplayPosition == TodoDisplayPosition.ABOVE_INPUT_BAR
     val queuedRequests by viewModel.queuedRequests.collectAsStateWithLifecycle()
     val targetRewindMessageId by viewModel.targetRewindMessageId.collectAsStateWithLifecycle()
     val providers = (settingsViewModel?.providers?.collectAsStateWithLifecycle()?.value ?: emptyList()).filter { it.isEnabled }
@@ -1342,6 +1352,17 @@ fun AIChatPanel(
         }
     }
 
+    // Liquid Glass：整页只此一层 backdrop，标题栏 / 输入区 / 待办浮层共用，
+    // 避免多个全屏 capture 拖垮 GPU 与内存。
+    val glassLayer = rememberChatGlassLayer()
+    val glassLuminance = rememberGlassLuminance(glassLayer)
+    // 悬浮标题栏不再占用布局高度，改由消息列表的 contentPadding 预留：
+    // 状态栏高度 + 标题栏内容高度（远程会话再多一行连接状态）。
+    val density = LocalDensity.current
+    val topReserveDp = with(density) {
+        WindowInsets.statusBars.getTop(density).toDp()
+    } + CHAT_HEADER_HEIGHT_DP.dp + (if (isRemote && connectionState != null) CHAT_HEADER_CONNECTION_ROW_DP.dp else 0.dp)
+
     CompositionLocalProvider(
         LocalMarkdownImageTransformer provides markdownImageTransformer,
         LocalImageViewer provides imageViewerState,
@@ -1350,29 +1371,6 @@ fun AIChatPanel(
         Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            ChatHeader(
-                sessionTitle = sessionTitle,
-                modelName = activeProvider?.effectiveModel,
-                inputTokens = sessionInputTokens,
-                outputTokens = sessionOutputTokens,
-                onOpenDrawer = {
-                    keyboardController?.hide()
-                    onOpenDrawer()
-                },
-                onNewChat = { viewModel.newSession() },
-                onNavigateToTerminal = onNavigateToTerminal,
-                onNavigateToGit = onNavigateToGit,
-                onNavigateToBrowser = onNavigateToBrowser,
-                currentMode = currentMode,
-                onToggleMode = { viewModel.setSessionMode(it) },
-                connectionState = connectionState?.takeIf { isRemote },
-                showMenuButton = showMenuButton,
-                terminalActive = terminalActive,
-                gitActive = gitActive,
-                browserActive = browserActive
-            )
-        }
     ) { padding ->
         Box(
             modifier = modifier
@@ -1387,8 +1385,26 @@ fun AIChatPanel(
                 .widthIn(max = readableContentMaxWidth())
                 .fillMaxSize()
         ) {
-            // 内容层：消息列表延伸到屏幕底部，输入框悬浮其上，滚动时卡片可滑入输入框后面
-            Column(modifier = Modifier.fillMaxSize()) {
+            // 内容层：消息列表延伸到屏幕底部，输入框悬浮其上，滚动时卡片可滑入输入框后面。
+            // 唯一一处 backdrop 采样：标题栏 / 输入区 / 待办浮层的玻璃都读这一层，
+            // 避免同时存在多个全屏 backdrop capture。
+            Column(modifier = Modifier.fillMaxSize().glassBackdrop(glassLayer)) {
+            // 任务待办（显示位置 = 标题栏下方）：紧贴标题栏之下、消息流之前，占一行高度。
+            // 默认只显示「x/y 已完成」与当前进行中任务，展开后由本组件自身撑高。
+            if (todoBelowTitleBar && currentTodoItems.isNotEmpty()) {
+                TodoDashboardBar(
+                    items = currentTodoItems,
+                    sessionId = currentSessionId.orEmpty(),
+                    forceCollapse = dashboardCollapseActive,
+                    onExpandedChange = { todoExpanded = it },
+                    modifier = Modifier.padding(
+                        start = Spacing.lg,
+                        end = Spacing.lg,
+                        top = topReserveDp,
+                        bottom = Spacing.xs
+                    )
+                )
+            }
             Box(modifier = Modifier.weight(1f)) {
                 if (!messagesReady) {
                     // 远程模式连接未就绪时显示连接状态占位，避免空白或旧工作区记录闪烁
@@ -1431,7 +1447,8 @@ fun AIChatPanel(
                         contentPadding = PaddingValues(
                             start = Spacing.lg,
                             end = Spacing.lg,
-                            top = Spacing.md,
+                            // 首屏把第一条消息让到悬浮标题栏下方；滚动后内容从玻璃后面穿过
+                            top = topReserveDp + Spacing.md,
                             bottom = with(LocalDensity.current) { inputBarReservePx.toDp() }
                         )
                     ) {
@@ -1578,6 +1595,37 @@ fun AIChatPanel(
             }
             } // 内容层结束
 
+            // 悬浮玻璃标题栏：不再是 Scaffold 的 topBar（那样会永久扣掉一块高度），
+            // 而是叠在消息列表之上；列表只用 contentPadding 预留首屏空间，滚动时内容穿过玻璃。
+            ChatHeader(
+                sessionTitle = sessionTitle,
+                modelName = activeProvider?.effectiveModel,
+                inputTokens = sessionInputTokens,
+                outputTokens = sessionOutputTokens,
+                onOpenDrawer = {
+                    keyboardController?.hide()
+                    onOpenDrawer()
+                },
+                onNewChat = { viewModel.newSession() },
+                onNavigateToTerminal = onNavigateToTerminal,
+                onNavigateToGit = onNavigateToGit,
+                onNavigateToBrowser = onNavigateToBrowser,
+                currentMode = currentMode,
+                onToggleMode = { viewModel.setSessionMode(it) },
+                connectionState = connectionState?.takeIf { isRemote },
+                showMenuButton = showMenuButton,
+                terminalActive = terminalActive,
+                gitActive = gitActive,
+                browserActive = browserActive,
+                glassBackdrop = glassLayer,
+                glassLuminance = { glassLuminance.luminance },
+                glassContentColor = glassLuminance.contentColor,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .widthIn(max = readableContentMaxWidth())
+            )
+
             // 悬浮层：错误气泡 / 面板 / 输入框（蒙版在 ChatInputBar 内部，跟随键盘上移）
             val floatingPanelAlpha by animateFloatAsState(
                 targetValue = if (listState.isScrollInProgress) 0.4f else 1f,
@@ -1680,7 +1728,10 @@ fun AIChatPanel(
                 onEditQueued = { queuedEditing = it },
                 onInterjectQueued = { viewModel.interjectQueuedRequest(it) },
                 dashboardState = currentDashboardState,
-                todoItems = currentTodoItems,
+                // 只有「消息栏上方」时待办由输入栏渲染；标题栏下方时在上面单独渲染，关闭时不渲染。
+                todoItems = if (todoAboveInputBar) currentTodoItems else emptyList(),
+                glassBackdrop = glassLayer,
+                glassLuminance = { glassLuminance.luminance },
                 sessionId = currentSessionId.orEmpty(),
                 onTodoExpandedChange = { todoExpanded = it },
                 forceCollapseDashboard = pendingPermission != null || pendingQuestion != null || planApproval != null || imeVisible,

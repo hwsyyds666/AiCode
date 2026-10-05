@@ -36,6 +36,7 @@ import com.aicode.core.theme.semanticColors
 import com.aicode.core.ui.AppSwitch
 import com.aicode.core.ui.AppTextField
 import com.aicode.feature.settings.data.repository.StartupSessionMode
+import com.aicode.feature.settings.data.repository.TodoDisplayPosition
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Check
 
@@ -61,9 +62,12 @@ internal fun GeneralSettingsSection(
     sendFileMaxSizeMb: Int,
     onSetSendFileMaxSizeMb: (Int) -> Unit,
     deleteExternalWorkspaceSessions: Boolean,
-    onToggleDeleteExternalWorkspaceSessions: (Boolean) -> Unit
+    onToggleDeleteExternalWorkspaceSessions: (Boolean) -> Unit,
+    todoDisplayPosition: TodoDisplayPosition,
+    onSelectTodoDisplayPosition: (TodoDisplayPosition) -> Unit
 ) {
     var showStartupSessionSheet by remember { mutableStateOf(false) }
+    var showTodoPositionSheet by remember { mutableStateOf(false) }
     var editingFirstByteTimeout by remember { mutableStateOf(false) }
     var editingStreamIdleTimeout by remember { mutableStateOf(false) }
     var editingMaxNetworkRetries by remember { mutableStateOf(false) }
@@ -150,6 +154,24 @@ internal fun GeneralSettingsSection(
             )
         }
 
+        // 工具：AI 侧工具能力在界面上的呈现方式（目前只有任务待办的显示位置）
+        SettingsGroupHeader(text = stringResource(R.string.settings_general_tools))
+        SettingsGroup {
+            SettingsRow(
+                icon = null,
+                title = stringResource(R.string.settings_todo_display_position),
+                subtitle = stringResource(R.string.settings_todo_display_position_desc),
+                onClick = { showTodoPositionSheet = true },
+                trailing = {
+                    Text(
+                        text = stringResource(todoDisplayPosition.labelRes()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.semanticColors.subtleText
+                    )
+                }
+            )
+        }
+
         SettingsGroupHeader(text = stringResource(R.string.settings_general_network))
         SettingsGroup {
             SettingsRow(
@@ -221,6 +243,17 @@ internal fun GeneralSettingsSection(
                 showStartupSessionSheet = false
             },
             onDismiss = { showStartupSessionSheet = false }
+        )
+    }
+
+    if (showTodoPositionSheet) {
+        TodoPositionSheet(
+            selected = todoDisplayPosition,
+            onSelect = {
+                onSelectTodoDisplayPosition(it)
+                showTodoPositionSheet = false
+            },
+            onDismiss = { showTodoPositionSheet = false }
         )
     }
 
@@ -411,6 +444,80 @@ private fun StartupSessionSheet(
 private fun StartupSessionMode.labelRes(): Int = when (this) {
     StartupSessionMode.NEW_SESSION -> R.string.settings_startup_session_new
     StartupSessionMode.RECENT_SESSION -> R.string.settings_startup_session_recent
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TodoPositionSheet(
+    selected: TodoDisplayPosition,
+    onSelect: (TodoDisplayPosition) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AdaptiveModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = Spacing.xl)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_todo_display_position),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .padding(horizontal = Spacing.lg)
+                    .padding(bottom = Spacing.md)
+            )
+
+            TodoDisplayPosition.entries.forEach { position ->
+                val isSelected = position == selected
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(position) }
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(position.labelRes()),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(position.descRes()),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (isSelected) {
+                        Icon(
+                            imageVector = FeatherIcons.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun TodoDisplayPosition.labelRes(): Int = when (this) {
+    TodoDisplayPosition.BELOW_TITLE_BAR -> R.string.settings_todo_position_below_title
+    TodoDisplayPosition.ABOVE_INPUT_BAR -> R.string.settings_todo_position_above_input
+    TodoDisplayPosition.OFF -> R.string.settings_todo_position_off
+}
+
+private fun TodoDisplayPosition.descRes(): Int = when (this) {
+    TodoDisplayPosition.BELOW_TITLE_BAR -> R.string.settings_todo_position_below_title_desc
+    TodoDisplayPosition.ABOVE_INPUT_BAR -> R.string.settings_todo_position_above_input_desc
+    TodoDisplayPosition.OFF -> R.string.settings_todo_position_off_desc
 }
 
 private fun StartupSessionMode.descRes(): Int = when (this) {
