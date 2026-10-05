@@ -15,7 +15,6 @@ import com.aicode.feature.agent.domain.tool.ToolPermissionPolicy
 import com.aicode.feature.agent.domain.tool.ToolResult
 import com.aicode.feature.agent.domain.tool.ToolStreamEvent
 import com.aicode.feature.workspace.data.repository.WorkspaceRepository
-import com.aicode.feature.workspace.domain.WorkspacePathMapper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -37,8 +36,7 @@ import javax.inject.Inject
  */
 class ExecuteCommandTool @Inject constructor(
     private val delegatingEngine: DelegatingCommandEngine,
-    private val workspaceRepository: WorkspaceRepository,
-    private val pathMapper: WorkspacePathMapper
+    private val workspaceRepository: WorkspaceRepository
 ) : AgentTool(), StreamingAgentTool {
     private companion object {
         const val TAG = "ExecuteCommandTool"
@@ -122,12 +120,10 @@ class ExecuteCommandTool @Inject constructor(
 
         return try {
             val env = resolveEnv(args)
-            // 容器环境需要容器内路径（~/workspace/…）；其余环境用当前工作区路径（引擎各自解析）。
-            val workdir = if (env == DelegatingCommandEngine.TargetEnv.CONTAINER) {
-                pathMapper.toContainerPath(workspaceRepository.currentPath())
-            } else {
-                workspaceRepository.currentPath()
-            }
+            // 所有环境都传宿主绝对路径作为工作区：容器引擎内部用 -b 把它 bind 成容器内 /root/workspace。
+            // 不能在此先 toContainerPath()——它返回字面量 ~/workspace，proot 在宿主上解析不到该路径，
+            // 导致绑定失败、容器内 /root/workspace 变成空占位（常驻终端走宿主绝对路径故正常）。
+            val workdir = workspaceRepository.currentPath()
             val engine = delegatingEngine.engineFor(env)
             // 显式选择环境时先做就绪检查：容器未装/未初始化时给 AI 明确原因，而不是让命令莫名失败。
             if (env != DelegatingCommandEngine.TargetEnv.AUTO) {
@@ -167,11 +163,8 @@ class ExecuteCommandTool @Inject constructor(
         val accumulated = BoundedOutput()
         try {
             val env = resolveEnv(args)
-            val workdir = if (env == DelegatingCommandEngine.TargetEnv.CONTAINER) {
-                pathMapper.toContainerPath(workspaceRepository.currentPath())
-            } else {
-                workspaceRepository.currentPath()
-            }
+            // 同 execute：所有环境传宿主绝对路径，容器引擎内部 -b 映射为 /root/workspace。
+            val workdir = workspaceRepository.currentPath()
             val engine = delegatingEngine.engineFor(env)
             if (env != DelegatingCommandEngine.TargetEnv.AUTO) {
                 engine.notReadyHint()?.let { hint ->
