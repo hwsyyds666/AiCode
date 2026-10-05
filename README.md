@@ -8,10 +8,17 @@
   </p>
 </p>
 
+> **Fork 说明**：本项目是基于原作者 [jieapi/AiCode](https://github.com/jieapi/aicode) 的二次开发分支，
+> 在原项目基础上新增了 **Liquid Glass 液态玻璃 UI（PrismalAGSL 折射/色散/渐变玻璃）**、
+> **AI 待办任务显示位置偏好**、**悬浮玻璃标题栏**等功能，并修复了容器通道与性能问题。
+> 原项目版权归原作者所有，本分支遵循相同的 [GPL-3.0](LICENSE) 协议开源。
+>
+> 原项目地址：https://github.com/jieapi/aicode
+
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License GPL-3.0" /></a>
   <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Android Platform" />
-  <a href="https://github.com/jieapi/aicode/releases"><img src="https://img.shields.io/github/v/release/jieapi/aicode?display_name=tag&include_prereleases" alt="Latest Release" /></a>
+  <a href="https://github.com/hwsyyds666/AiCode/releases"><img src="https://img.shields.io/github/v/release/hwsyyds666/AiCode?display_name=tag&include_prereleases" alt="Latest Release" /></a>
 </p>
 
 <p align="center">
@@ -96,14 +103,14 @@ AiCode 是运行在 Android 上的通用 AI Coding Agent，把一套完整的 Li
 | 项目 | 说明 |
 |------|------|
 | 系统要求 | Android 8.0+（API 26），arm64-v8a / x86_64 |
-| 下载地址 | [GitHub Releases](https://github.com/jieapi/aicode/releases/latest)：真机选 `armsolo`、模拟器选 `x86solo`、通用选 `universal` 包 |
+| 下载地址 | [GitHub Releases](https://github.com/hwsyyds666/AiCode/releases/latest)：真机选 `armsolo`、模拟器选 `x86solo`、通用选 `universal` 包 |
 | 快速上手 | 「设置 → AI 供应商」配模型 →「容器与镜像」选本地或 SSH → 新建会话开始对话 |
-| 更新记录 | [Releases](https://github.com/jieapi/aicode/releases)（历史版本与更新说明） |
+| 更新记录 | [Releases](https://github.com/hwsyyds666/AiCode/releases)（历史版本与更新说明） |
 | 使用指南 | [在线文档](https://aicode.murk.top)：快速上手、使用手册与进阶教程（与 App 内置文档同源） |
 
 ## Star
 
-如果 AiCode 对你有帮助，欢迎 [Star](https://github.com/jieapi/aicode) 支持，让更多开发者看到这个项目。
+如果 AiCode 对你有帮助，欢迎 [Star](https://github.com/hwsyyds666/AiCode) 支持，让更多开发者看到这个项目。
 
 ## Star History
 
@@ -118,15 +125,17 @@ AiCode 是运行在 Android 上的通用 AI Coding Agent，把一套完整的 Li
 ## 反馈与贡献
 
 - **交流群**：加入 [AiCode QQ 交流群](https://qm.qq.com/q/ByvqODJdIs)（群号：1107110698），交流使用心得、反馈问题
-- **Bug 反馈**：到 [Issues](https://github.com/jieapi/aicode/issues) 提交，附上复现步骤、设备型号与系统版本，便于定位
-- **功能建议**：想加新功能或改进，欢迎先在 [Issues](https://github.com/jieapi/aicode/issues) 讨论
-- **贡献代码**：欢迎提交 [Pull Request](https://github.com/jieapi/aicode/pulls)
+- **Bug 反馈**：到 [Issues](https://github.com/hwsyyds666/AiCode/issues) 提交，附上复现步骤、设备型号与系统版本，便于定位
+- **功能建议**：想加新功能或改进，欢迎先在 [Issues](https://github.com/hwsyyds666/AiCode/issues) 讨论
+- **贡献代码**：欢迎提交 [Pull Request](https://github.com/hwsyyds666/AiCode/pulls)
 
 ## 致谢
 
+- **[jieapi/AiCode](https://github.com/jieapi/aicode)** — 原作者项目，本分支的基础
 - [OpenCode](https://github.com/anomalyco/opencode) — 终端 AI 编码工具，本项目的核心灵感来源
 - [Termux](https://github.com/termux/termux-app) — Android 终端模拟器，提供了终端组件与 PRoot 方案
 - [Kelivo](https://github.com/Chevey339/kelivo) — 跨平台 LLM 聊天客户端，AI 对话界面设计参考
+- [PrismalAGSL](https://github.com/styropyr0/PrismalAGSL) — AGSL 液态玻璃效果库
 
 ## 开源协议
 

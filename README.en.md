@@ -8,10 +8,18 @@
   </p>
 </p>
 
+> **Fork Notice**: This is a fork of the original project [jieapi/AiCode](https://github.com/jieapi/aicode),
+> adding **Liquid Glass UI (PrismalAGSL refraction / chromatic dispersion / gradient glass)**,
+> **AI todo display position preferences**, **floating glass title bar**, and other enhancements,
+> plus container channel and performance fixes. All credit to the original author; this fork
+> is released under the same [GPL-3.0](LICENSE) license.
+>
+> Original project: https://github.com/jieapi/aicode
+
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License GPL-3.0" /></a>
   <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Android Platform" />
-  <a href="https://github.com/jieapi/aicode/releases"><img src="https://img.shields.io/github/v/release/jieapi/aicode?display_name=tag&include_prereleases" alt="Latest Release" /></a>
+  <a href="https://github.com/hwsyyds666/AiCode/releases"><img src="https://img.shields.io/github/v/release/hwsyyds666/AiCode?display_name=tag&include_prereleases" alt="Latest Release" /></a>
 </p>
 
 <p align="center">
@@ -96,14 +104,14 @@ There is nothing to set up beforehand: install the app, configure a model under 
 | Item | Description |
 |------|-------------|
 | System requirements | Android 8.0+ (API 26), arm64-v8a / x86_64 |
-| Download | [GitHub Releases](https://github.com/jieapi/aicode/releases/latest): pick `armsolo` for real devices, `x86solo` for emulators, `universal` for both |
+| Download | [GitHub Releases](https://github.com/hwsyyds666/AiCode/releases/latest): pick `armsolo` for real devices, `x86solo` for emulators, `universal` for both |
 | Quick start | Settings → AI Vendors to add a model → Container & Images to pick local or SSH → new session and chat |
-| Changelog | [Releases](https://github.com/jieapi/aicode/releases) (all versions & notes) |
+| Changelog | [Releases](https://github.com/hwsyyds666/AiCode/releases) (all versions & notes) |
 | User guide | [Online docs](https://aicode.murk.top): quick start, user manual and advanced guides (same content as the in-app docs) |
 
 ## Star
 
-If AiCode is helpful to you, give it a [Star](https://github.com/jieapi/aicode) — it helps more developers discover the project.
+If AiCode is helpful to you, give it a [Star](https://github.com/hwsyyds666/AiCode) — it helps more developers discover the project.
 
 ## Star History
 
@@ -118,15 +126,17 @@ If AiCode is helpful to you, give it a [Star](https://github.com/jieapi/aicode) 
 ## Feedback & Contribution
 
 - **QQ group**: join the [AiCode QQ group](https://qm.qq.com/q/ByvqODJdIs) (group number: 1107110698) to share tips and feedback
-- **Bug reports**: open an [Issue](https://github.com/jieapi/aicode/issues) with reproduction steps, device model and OS version
-- **Feature requests**: discuss your ideas in [Issues](https://github.com/jieapi/aicode/issues)
-- **Contributing**: submit a [Pull Request](https://github.com/jieapi/aicode/pulls)
+- **Bug reports**: open an [Issue](https://github.com/hwsyyds666/AiCode/issues) with reproduction steps, device model and OS version
+- **Feature requests**: discuss your ideas in [Issues](https://github.com/hwsyyds666/AiCode/issues)
+- **Contributing**: submit a [Pull Request](https://github.com/hwsyyds666/AiCode/pulls)
 
 ## Acknowledgements
 
+- **[jieapi/AiCode](https://github.com/jieapi/aicode)** — Original project, the foundation of this fork
 - [OpenCode](https://github.com/anomalyco/opencode) — Terminal-based AI coding tool, the core inspiration for this project
 - [Termux](https://github.com/termux/termux-app) — Android terminal emulator, provided terminal components and PRoot solution
 - [Kelivo](https://github.com/Chevey339/kelivo) — Cross-platform LLM chat client, AI conversation UI design reference
+- [PrismalAGSL](https://github.com/styropyr0/PrismalAGSL) — AGSL liquid glass effect library
 
 ## License
 
