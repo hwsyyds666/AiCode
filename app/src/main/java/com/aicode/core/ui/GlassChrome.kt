@@ -171,26 +171,36 @@ fun GlassSurface(
 /**
  * 玻璃体积光：斜向 sheen（左上微亮、底部极轻反光）+ 顶部 specular 高光带。
  * 画在内容之下，只提供「光穿过玻璃」的体积感，不干扰阅读。
+ *
+ * Brush remember 化：GlassSurface 重组时不再每帧分配 3 个新 Brush 对象，
+ * 减少滚动/流式输出期间的 GC 压力与 GPU 着色器管线重建。
  */
 @Composable
 private fun BoxScope.GlassSheenOverlay(cornerRadius: Dp) {
     val shape = RoundedCornerShape(cornerRadius)
     // 浅色主题下背景本身亮，高光要更收敛，避免一片白
     val scale = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) 0.55f else 1f
+    val sheenBrush = remember(scale) {
+        Brush.linearGradient(
+            0.0f to Color.White.copy(alpha = 0.10f * scale),
+            0.22f to Color.White.copy(alpha = 0.03f * scale),
+            0.5f to Color.Transparent,
+            1.0f to Color.White.copy(alpha = 0.05f * scale),
+            start = Offset.Zero,
+            end = Offset.Infinite
+        )
+    }
+    val specularBrush = remember(scale) {
+        Brush.verticalGradient(
+            0.0f to Color.White.copy(alpha = 0.22f * scale),
+            1.0f to Color.Transparent
+        )
+    }
     Box(
         modifier = Modifier
             .matchParentSize()
             .clip(shape)
-            .background(
-                Brush.linearGradient(
-                    0.0f to Color.White.copy(alpha = 0.10f * scale),
-                    0.22f to Color.White.copy(alpha = 0.03f * scale),
-                    0.5f to Color.Transparent,
-                    1.0f to Color.White.copy(alpha = 0.05f * scale),
-                    start = Offset.Zero,
-                    end = Offset.Infinite
-                )
-            )
+            .background(sheenBrush)
     )
     Box(
         modifier = Modifier
@@ -198,12 +208,7 @@ private fun BoxScope.GlassSheenOverlay(cornerRadius: Dp) {
             .height(16.dp)
             .align(Alignment.TopCenter)
             .clip(shape)
-            .background(
-                Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = 0.22f * scale),
-                    1.0f to Color.Transparent
-                )
-            )
+            .background(specularBrush)
     )
 }
 
@@ -214,17 +219,20 @@ private fun BoxScope.GlassSheenOverlay(cornerRadius: Dp) {
 @Composable
 private fun BoxScope.GlassRimOverlay(cornerRadius: Dp) {
     val scale = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) 0.5f else 1f
+    val rimBrush = remember(scale) {
+        Brush.verticalGradient(
+            0.0f to Color.White.copy(alpha = 0.55f * scale),
+            0.12f to Color.White.copy(alpha = 0.20f * scale),
+            0.5f to Color.White.copy(alpha = 0.07f * scale),
+            1.0f to Color.White.copy(alpha = 0.30f * scale)
+        )
+    }
     Box(
         modifier = Modifier
             .matchParentSize()
             .border(
                 width = 1.dp,
-                brush = Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = 0.55f * scale),
-                    0.12f to Color.White.copy(alpha = 0.20f * scale),
-                    0.5f to Color.White.copy(alpha = 0.07f * scale),
-                    1.0f to Color.White.copy(alpha = 0.30f * scale)
-                ),
+                brush = rimBrush,
                 shape = RoundedCornerShape(cornerRadius)
             )
     )
