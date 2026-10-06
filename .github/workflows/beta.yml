@@ -41,6 +41,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # runner 预装 SDK 只到 android-36，compileSdk 已升 37（PrismalAGSL 要求），需补装平台。
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform 37 & build-tools 36
+        run: sdkmanager --install "platforms;android-37" "build-tools;36.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:

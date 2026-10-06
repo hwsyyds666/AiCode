@@ -33,6 +33,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # runner 预装的 Android SDK 只有到 android-36，而 compileSdk 已升到 37
+      # （PrismalAGSL 的 aar-metadata 声明 minCompileSdk=37，AGP 强校验）。
+      # 缺平台时 Gradle 在解析依赖阶段就报
+      # "Failed to find Platform SDK with path: platforms;android-37"，构建根本进不到编译。
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform 37 & build-tools 36
+        run: |
+          sdkmanager --install "platforms;android-37" "build-tools;36.0.0"
+          sdkmanager --list_installed | grep -E "platforms;android-3[5-9]|build-tools;36" || true
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
