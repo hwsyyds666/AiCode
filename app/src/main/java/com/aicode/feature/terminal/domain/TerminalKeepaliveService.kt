@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.IBinder
 import android.os.PowerManager
@@ -36,6 +37,14 @@ class TerminalKeepaliveService : Service() {
      * SSE/网络 I/O 不会被系统挂起。所有会话结束或常驻关闭时释放。
      */
     private var wakeLock: PowerManager.WakeLock? = null
+
+    /**
+     * 服务级 WifiLock：有活跃会话时持有 WIFI_MODE_FULL_HIGH_PERF，确保切后台后 Wi-Fi 无线电
+     * 不进入低功耗模式。PARTIAL_WAKE_LOCK 只保 CPU 不休眠，但系统仍可能让 Wi-Fi 降频导致
+     * TCP 长连接 I/O 被挂起——这是切后台 SSE 断网的核心原因。
+     * 浏览器下载不受影响是因为 DownloadManager 跑在系统进程，不受应用后台限制。
+     */
+    private var wifiLock: WifiManager.WifiLock? = null
 
     @Inject
     lateinit var keepaliveSettings: KeepaliveSettingsRepository
@@ -158,25 +167,46 @@ class TerminalKeepaliveService : Service() {
     }
 
     /**
-     * 获取服务级 PARTIAL_WAKE_LOCK：切后台后保持 CPU 唤醒，防止系统挂起网络 I/O。
+     * 获取服务级 PARTIAL_WAKE_LOCK + WIFI_MODE_FULL_HIGH_PERF WifiLock：
+     * - WakeLock 保 CPU 唤醒，防止系统挂起网络 I/O
+     * - WifiLock 保 Wi-Fi 无线电高性能模式，防止切后台后 Wi-Fi 降频导致 TCP 断连
+     * 两者缺一不可：只有 CPU 醒着但 Wi-Fi 休眠，SSE 仍然断。
      * 仅在有活跃会话时持有，会话全部结束时释放。
      */
     private fun acquireServiceWakeLock() {
-        if (wakeLock?.isHeld == true) return
-        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AiCode:KeepaliveService").also {
-            runCatching { it.acquire(WAKELOCK_TIMEOUT_MS) }
-                .onFailure { FileLogger.e(TAG, "acquire service wakeLock failed", it) }
+        if (wakeLock?.isHeld != true) {
+            val pm = getSystemService(POWER_SERVICE) as? PowerManager
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AiCode:KeepaliveService").also {
+                    runCatching { it.acquire(WAKELOCK_TIMEOUT_MS) }
+                        .onFailure { FileLogger.e(TAG, "acquire service wakeLock failed", it) }
+                }
+            }
+        }
+        if (wifiLock?.isHeld != true) {
+            val wm = getSystemService(WIFI_SERVICE) as? WifiManager
+            if (wm != null) {
+                @Suppress("DEPRECATION")
+                wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "AiCode:StreamNetwork").also {
+                    runCatching { it.acquire() }
+                        .onFailure { FileLogger.e(TAG, "acquire wifiLock failed", it) }
+                }
+            }
         }
     }
 
-    /** 释放服务级 WakeLock。 */
+    /** 释放服务级 WakeLock 和 WifiLock。 */
     private fun releaseServiceWakeLock() {
         wakeLock?.takeIf { it.isHeld }?.let { lock ->
             runCatching { lock.release() }
                 .onFailure { FileLogger.e(TAG, "release service wakeLock failed", it) }
         }
         wakeLock = null
+        wifiLock?.takeIf { it.isHeld }?.let { lock ->
+            runCatching { lock.release() }
+                .onFailure { FileLogger.e(TAG, "release wifiLock failed", it) }
+        }
+        wifiLock = null
     }
 
     companion object {
