@@ -961,20 +961,32 @@ class AIAgentViewModel @Inject constructor(
         }
     }
 
-    /** 任务开始：拿 CPU 唤醒锁并拉起前台保活通知，避免熄屏或切后台时进程被挂起、回收。 */
+    /**
+     * 任务开始：拉起前台保活服务（注册为活跃会话）并获取 CPU 唤醒锁，
+     * 确保切后台 / 熄屏时进程不被系统挂起、网络 I/O 不断。
+     *
+     * 使用 startSession（ACTION_START_SESSION）而非 enablePersistent：
+     * - startSession 递增 sessionCount，前台服务知道有活跃会话在跑；
+     * - startSession 用 startForegroundService 启动，Android 8+ 从后台恢复时也能正确拉起；
+     * - ensureForeground 中根据 sessionCount > 0 显示「N 个会话运行中」而非笼统的「保活已开启」。
+     */
     private fun acquireKeepalive() {
-        TerminalKeepaliveService.enablePersistent(context)
+        TerminalKeepaliveService.startSession(context)
         if (wakeLock.isHeld) return
         runCatching { wakeLock.acquire(KEEPALIVE_TIMEOUT_MS) }
             .onFailure { FileLogger.e(TAG, "acquire wakeLock failed", it) }
     }
 
-    /** 任务收尾：释放唤醒锁；仅当既无后台终端任务、用户也没手动开保活时才停前台服务。 */
+    /**
+     * 任务收尾：释放唤醒锁；结束活跃会话计数（sessionCount 递减）。
+     * 仅当既无后台终端任务、用户也没手动开保活时才停前台服务。
+     */
     private fun releaseKeepalive() {
         if (wakeLock.isHeld) {
             runCatching { wakeLock.release() }
                 .onFailure { FileLogger.e(TAG, "release wakeLock failed", it) }
         }
+        TerminalKeepaliveService.stopSession(context)
         if (!userKeepaliveEnabled && !terminalSessionManager.hasBackgroundTabs()) {
             TerminalKeepaliveService.disablePersistent(context)
         }

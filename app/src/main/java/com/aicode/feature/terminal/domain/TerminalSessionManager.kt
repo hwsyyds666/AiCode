@@ -512,18 +512,12 @@ class TerminalSessionManager @Inject constructor(
         SU_CANDIDATES.firstOrNull { java.io.File(it).exists() } ?: "su"
 
     private fun startKeepaliveService() {
-        val intent = Intent(appContext, TerminalKeepaliveService::class.java).apply {
-            action = TerminalKeepaliveService.ACTION_START_SESSION
-        }
-        appContext.startService(intent)
+        TerminalKeepaliveService.startSession(appContext)
         FileLogger.i(TAG, "后台保活 Service 已启动")
     }
 
     private fun stopKeepaliveService() {
-        val intent = Intent(appContext, TerminalKeepaliveService::class.java).apply {
-            action = TerminalKeepaliveService.ACTION_STOP_SESSION
-        }
-        appContext.startService(intent)
+        TerminalKeepaliveService.stopSession(appContext)
         FileLogger.i(TAG, "后台保活 Service 已停止")
     }
 

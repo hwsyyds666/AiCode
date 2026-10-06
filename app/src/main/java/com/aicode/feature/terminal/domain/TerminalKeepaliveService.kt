@@ -7,8 +7,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.aicode.MainActivity
 import com.aicode.core.util.FileLogger
 import com.aicode.R
@@ -28,6 +30,12 @@ class TerminalKeepaliveService : Service() {
 
     /** 用户在设置页开启的常驻保活：为 true 时即便没有后台会话也保持前台通知。 */
     private var persistent = false
+
+    /**
+     * 服务级 WakeLock：有活跃会话时持有 PARTIAL_WAKE_LOCK，确保切后台后 CPU 不休眠、
+     * SSE/网络 I/O 不会被系统挂起。所有会话结束或常驻关闭时释放。
+     */
+    private var wakeLock: PowerManager.WakeLock? = null
 
     @Inject
     lateinit var keepaliveSettings: KeepaliveSettingsRepository
@@ -53,6 +61,7 @@ class TerminalKeepaliveService : Service() {
     }
 
     override fun onDestroy() {
+        releaseServiceWakeLock()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -73,26 +82,31 @@ class TerminalKeepaliveService : Service() {
             ACTION_START_SESSION -> {
                 sessionCount++
                 ensureForeground()
+                acquireServiceWakeLock()
                 FileLogger.i(TAG, "Session started, count=$sessionCount")
             }
             ACTION_STOP_SESSION -> {
                 sessionCount = (sessionCount - 1).coerceAtLeast(0)
                 if (sessionCount == 0 && !persistent) {
+                    releaseServiceWakeLock()
                     stopSelf(startId)
                     FileLogger.i(TAG, "All sessions ended, stopping service")
                 } else {
                     ensureForeground()
+                    if (sessionCount == 0) releaseServiceWakeLock()
                     FileLogger.i(TAG, "Session ended, count=$sessionCount, persistent=$persistent")
                 }
             }
             ACTION_ENABLE_PERSISTENT -> {
                 persistent = true
                 ensureForeground()
+                acquireServiceWakeLock()
                 FileLogger.i(TAG, "Persistent keepalive enabled")
             }
             ACTION_DISABLE_PERSISTENT -> {
                 persistent = false
                 if (sessionCount == 0) {
+                    releaseServiceWakeLock()
                     stopSelf(startId)
                     FileLogger.i(TAG, "Persistent keepalive disabled, no sessions, stopping service")
                 } else {
@@ -143,30 +157,65 @@ class TerminalKeepaliveService : Service() {
             .onFailure { FileLogger.e(TAG, "startForeground failed", it) }
     }
 
+    /**
+     * 获取服务级 PARTIAL_WAKE_LOCK：切后台后保持 CPU 唤醒，防止系统挂起网络 I/O。
+     * 仅在有活跃会话时持有，会话全部结束时释放。
+     */
+    private fun acquireServiceWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AiCode:KeepaliveService").also {
+            runCatching { it.acquire(WAKELOCK_TIMEOUT_MS) }
+                .onFailure { FileLogger.e(TAG, "acquire service wakeLock failed", it) }
+        }
+    }
+
+    /** 释放服务级 WakeLock。 */
+    private fun releaseServiceWakeLock() {
+        wakeLock?.takeIf { it.isHeld }?.let { lock ->
+            runCatching { lock.release() }
+                .onFailure { FileLogger.e(TAG, "release service wakeLock failed", it) }
+        }
+        wakeLock = null
+    }
+
     companion object {
         private const val TAG = "TerminalKeepaliveService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "terminal_service"
+        /** 服务级 WakeLock 超时保险：AI 流式生成可能持续很久，给足 60 分钟。 */
+        private const val WAKELOCK_TIMEOUT_MS = 60 * 60 * 1000L
         const val ACTION_START_SESSION = "com.aicode.action.START_SESSION"
         const val ACTION_STOP_SESSION = "com.aicode.action.STOP_SESSION"
         const val ACTION_ENABLE_PERSISTENT = "com.aicode.action.ENABLE_PERSISTENT"
         const val ACTION_DISABLE_PERSISTENT = "com.aicode.action.DISABLE_PERSISTENT"
 
-        /** 开启常驻保活（幂等）。 */
+        /**
+         * 注册一个活跃会话并拉起前台服务（用于 AI 流式生成 / 后台终端）。
+         * 使用 startForegroundService 而非 startService，确保 Android 8+ 从后台恢复时也能正确启动。
+         */
+        fun startSession(context: Context) {
+            val intent = Intent(context, TerminalKeepaliveService::class.java).apply {
+                action = ACTION_START_SESSION
+            }
+            ContextCompat.startForegroundService(context, intent)
+        }
+
+        /** 结束一个活跃会话。会话计数归零且无常驻保活时自动停止服务。 */
+        fun stopSession(context: Context) {
+            val intent = Intent(context, TerminalKeepaliveService::class.java).apply {
+                action = ACTION_STOP_SESSION
+            }
+            runCatching { context.startService(intent) }
+                .onFailure { FileLogger.e(TAG, "stopSession startService failed", it) }
+        }
+
+        /** 开启常驻保活（幂等）。使用 startForegroundService 确保后台也能拉起。 */
         fun enablePersistent(context: Context) {
             val intent = Intent(context, TerminalKeepaliveService::class.java).apply {
                 action = ACTION_ENABLE_PERSISTENT
             }
-            runCatching { context.startService(intent) }
-                .onFailure {
-                    // 后台冷启动时系统拒绝 startService（Android 8+ 后台执行限制），属预期场景，
-                    // 保活会在 App 回到前台或 WorkManager 兜底时恢复，不必刷全栈吓人日志。
-                    if (it.message?.contains("app is in background") == true) {
-                        FileLogger.i(TAG, "enablePersistent skipped: app in background, keepalive deferred")
-                    } else {
-                        FileLogger.e(TAG, "enablePersistent startService failed", it)
-                    }
-                }
+            ContextCompat.startForegroundService(context, intent)
         }
 
         /** 关闭常驻保活（幂等）。仅在确曾开启过时调用，避免为关闭而凭空拉起 Service。 */
