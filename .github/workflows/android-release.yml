@@ -68,20 +68,16 @@ jobs:
           rm -rf "$SDK/platforms/android-37"
           if [ -d "$SDK/platforms/android-37.0" ]; then
             cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
-            if [ -f "$SDK/platforms/android-37/package.xml" ]; then
-              sed -i -e 's#path="platforms;android-37\.0"#path="platforms;android-37"#' \
-                     -e 's#<id>android-37\.0</id>#<id>android-37</id>#g' \
-                     "$SDK/platforms/android-37/package.xml"
-            fi
-            if [ -f "$SDK/platforms/android-37/source.properties" ]; then
-              sed -i -e 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' \
-                     -e '/^AndroidVersion\.ExtensionLevel=/d' "$SDK/platforms/android-37/source.properties"
-            fi
+            # 与本地开发机保持一致：android-37 目录不带 package.xml / source.properties，
+            # AGP 直接从 build.prop 读 API 级别。
+            #   带 package.xml（path 仍是 platforms;android-37.0）→ 判 inconsistent location，目录被整个忽略；
+            #   带 37.0 的 source.properties → 平台被解析成 API 0，92 个依赖全报
+            #   "requires ... compile against version 1 or later"。
+            rm -f "$SDK/platforms/android-37/package.xml" "$SDK/platforms/android-37/source.properties"
           fi
           echo "--- platforms ---"
           ls -1 "$SDK/platforms" 2>/dev/null | grep -E "android-3[5-9]" || true
-          grep -o 'path="platforms;android-37[^"]*"' "$SDK/platforms/android-37/package.xml" | head -2 || true
-          grep -E "^AndroidVersion.ApiLevel=" "$SDK/platforms/android-37/source.properties" || true
+          grep -E "^ro.build.version.sdk=" "$SDK/platforms/android-37/build.prop" || true
           "$SM" --sdk_root="$SDK" --list_installed 2>/dev/null | grep -E "android-37|build-tools;36" || true
 
       - name: Set up Gradle
