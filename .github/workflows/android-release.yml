@@ -43,12 +43,23 @@ jobs:
         run: |
           set -e
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          SM="$SDK/cmdline-tools/16.0/bin/sdkmanager"
-          [ -x "$SM" ] || SM="$(command -v sdkmanager)"
-          [ -n "$SM" ] || { echo "::error::sdkmanager not found under $SDK"; ls "$SDK/cmdline-tools"; exit 1; }
-          echo "sdkmanager=$SM  sdk_root=$SDK"
-          yes | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
-          "$SM" --sdk_root="$SDK" --list_installed | grep -E "platforms;android-37|build-tools;36.0.0" || true
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset} ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset} SDK=$SDK"
+          ls -1 "$SDK" 2>/dev/null || true
+          ls -1 "$SDK/cmdline-tools" 2>/dev/null || true
+          SM=""
+          for c in "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/cmdline-tools/16.0/bin/sdkmanager" \
+                   "$SDK/cmdline-tools/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"; do
+            if [ -x "$c" ]; then SM="$c"; break; fi
+          done
+          if [ -z "$SM" ]; then SM="$(command -v sdkmanager 2>/dev/null || true)"; fi
+          echo "sdkmanager=$SM"
+          if [ -z "$SM" ]; then echo "::error::sdkmanager not found"; exit 1; fi
+          if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"; then
+            echo "::error::sdkmanager install failed; 远端可用 platform 版本："
+            "$SM" --sdk_root="$SDK" --list 2>/dev/null | grep -oE "platforms;android-[0-9]+" | sort -u | tail -8 || true
+            exit 1
+          fi
+          "$SM" --sdk_root="$SDK" --list_installed 2>/dev/null | grep -E "android-37|build-tools;36" || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
