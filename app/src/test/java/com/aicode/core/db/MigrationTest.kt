@@ -46,7 +46,20 @@ class MigrationTest {
         fun guardEnvironment() {
             val androidContainer = File("/system").exists() ||
                 System.getProperty("java.library.path")?.contains("/data/app") == true
-            assumeTrue("Robolectric 仅支持标准 Linux/CI 环境（当前为 Android PRoot 容器，会 UnsatisfiedLinkError）", !androidContainer)
+            // 除 Android 容器外，只要当前 JVM 加载不了 Robolectric 依赖的 conscrypt native
+            // 库（如 Windows ARM 缺 conscrypt_openjdk_jni-windows-aarch_64），同样无法执行——
+            // 按「能不能跑」而不是「是不是 Android」判断，避免非标准开发机把这条用例打成失败。
+            val conscryptLoadable = runCatching {
+                // isAvailable() 会真正触发 native 库加载并吞掉 UnsatisfiedLinkError，
+                // 因此是「当前环境能不能跑 Robolectric」的准确判据。
+                Class.forName("org.conscrypt.Conscrypt")
+                    .getMethod("isAvailable")
+                    .invoke(null) as Boolean
+            }.getOrDefault(false)
+            assumeTrue(
+                "Robolectric 需要标准 Linux/CI 环境且能加载 conscrypt native 库（当前环境不满足）",
+                !androidContainer && conscryptLoadable
+            )
         }
     }
 

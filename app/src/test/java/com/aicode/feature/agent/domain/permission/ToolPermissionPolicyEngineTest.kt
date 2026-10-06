@@ -160,33 +160,36 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun taskReadAction_deniedWhenWholeRuleDenies() = runTest {
+    fun taskReadAction_alwaysAllowed() = runTest {
+        // task 的只读动作走 evaluate 的快捷放行分支，早于挡位与规则匹配，规则不影响结果
         val e = engine(
             PermissionRule("task", PermissionRule.WHOLE_TOOL, PermissionDecision.DENY)
         )
         val r = e.evaluate(tool(ToolCapability.EXTERNAL_TOOL), "task", terminal("read"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.DENY, r.verdict)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
-    // ── DENY 优先于内置白名单 ───────────────────────────────────────
+    // ── 记忆规则已下线：shell 授权只由「挡位 + 高危规则」决定 ──────────
 
     @Test
-    fun denyRule_overridesSafeWhitelist() = runTest {
+    fun shellDenyRuleIgnored_authLevelDecides() = runTest {
+        // 命令类工具的 ALLOW/DENY 记忆规则已整体下线（会先于挡位生效、绕过高危拦截），
+        // ls 命中内置只读白名单 → 放行，DENY 规则不参与。
         val e = engine(
             PermissionRule("Bash", "ls", PermissionDecision.DENY)
         )
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("ls -la"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.DENY, r.verdict)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
-    // ── 不可静态判定：必弹窗、不可记忆 ───────────────────────────────
+    // ── 不可静态判定：无破坏特征则放行 ───────────────────────────────
 
     @Test
-    fun unanalyzableCommand_asksWithoutRememberable() = runTest {
+    fun unanalyzableBenignCommand_allowed() = runTest {
+        // 命令替换使静态判定失效，但对原文做破坏特征扫描无命中 → 放行（AI 排查命令常含 $()）
         val e = engine()
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("echo $(whoami)"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
-        assertTrue(r.rememberablePatterns.isEmpty())
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
     // ── 内置安全白名单自动放行 ───────────────────────────────────────
@@ -199,10 +202,11 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun mixOfSafeAndUnsafe_asks() = runTest {
+    fun mixOfSafeAndNonHighRisk_allowed() = runTest {
+        // 高危规则只覆盖递归/通配/批量删除，裸 `rm x` 未命中；整条命令可静态判定 → 放行。
         val e = engine()
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("ls -la && rm x"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
     // ── 已记忆 ALLOW 规则 ───────────────────────────────────────────
@@ -230,14 +234,13 @@ class ToolPermissionPolicyEngineTest {
     // ── rm 精细校验：无目标 / 递归 / 通配的规则不得放行 ───────────────
 
     @Test
-    fun bareRmRule_doesNotAllowRmWithTarget() = runTest {
+    fun bareRmRuleIgnored_nonRecursiveRmAllowed() = runTest {
         val e = engine(
             PermissionRule("Bash", "rm", PermissionDecision.ALLOW)
         )
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("rm file.txt"), AgentMode.BUILD)
-        // 规则无目标路径 → 不匹配；且 rm 单文件可记忆为完整前缀
-        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
-        assertEquals(listOf("rm file.txt"), r.rememberablePatterns)
+        // 规则不参与；`rm file.txt` 非递归/无通配，未命中高危规则 → 放行
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
     @Test
@@ -252,12 +255,15 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun recursiveRmRule_allowsRecursiveRm() = runTest {
+    fun recursiveRmRuleIgnored_stillAsks() = runTest {
+        // ALLOW 记忆规则已下线，递归删除命中高危规则 → 人工确认且不可记忆
         val e = engine(
             PermissionRule("Bash", "rm -rf /tmp/build", PermissionDecision.ALLOW)
         )
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("rm -rf /tmp/build"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
+        assertTrue(r.rememberablePatterns.isEmpty())
+        assertNotNull(r.rememberDisabledReason)
     }
 
     // ── 灾难性 rm 防护在 BUILD 模式同样生效 ─────────────────────────
@@ -413,10 +419,12 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun shizuku_denyRuleStillDenies() = runTest {
+    fun shizuku_denyRuleStillAsks() = runTest {
+        // Shizuku 一律走 forceAsk 分支（弹窗且不可记忆），DENY 规则不参与 → 结果为 ASK
         val e = engine(PermissionRule("Shizuku", "pm", PermissionDecision.DENY))
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Shizuku", shizuku("pm list packages"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.DENY, r.verdict)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
+        assertTrue(r.rememberablePatterns.isEmpty())
     }
 
     @Test
@@ -472,12 +480,14 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun genericTool_wholeRuleDenies() = runTest {
+    fun genericTool_wholeDenyRule_asks() = runTest {
+        // 非 shell 工具只认「整工具 ALLOW」记忆，DENY 规则不产生硬拒绝 → 落到默认的整工具 ASK
         val e = engine(
             PermissionRule("writeFile", PermissionRule.WHOLE_TOOL, PermissionDecision.DENY)
         )
         val r = e.evaluate(tool(ToolCapability.WRITE_WORKSPACE), "writeFile", emptyMap(), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.DENY, r.verdict)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
+        assertEquals(listOf(PermissionRule.WHOLE_TOOL), r.rememberablePatterns)
     }
 
     // ── remember：去重后逐条落库 ────────────────────────────────────
@@ -509,12 +519,11 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun ruleBased_highRiskHit_nonRecursiveRm_rememberable() = runTest {
+    fun ruleBased_nonRecursiveRmWithoutRuleHit_allows() = runTest {
+        // 裸 rm 单文件不在高危规则覆盖范围内（高危只管递归/通配/批量），可静态判定 → 放行
         val e = engine()
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("rm file.txt"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
-        assertTrue(r.askTitle?.startsWith("命中高危规则") == true)
-        assertEquals(listOf("rm file.txt"), r.rememberablePatterns)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
     @Test
@@ -526,10 +535,18 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun ruleBased_unanalyzableWithoutRuleHit_asks() = runTest {
-        // 未命中规则但不可静态判定（含命令替换）→ 弹窗兜底，不可记忆
+    fun ruleBased_unanalyzableBenign_allowed() = runTest {
+        // 未命中高危规则且不可静态判定（含命令替换）→ 对原文做破坏特征扫描，无命中则放行
         val e = engine()
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("echo $(whoami)"), AgentMode.BUILD)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
+    }
+
+    @Test
+    fun ruleBased_unanalyzableDestructive_asks() = runTest {
+        // 不可静态判定且原文含破坏特征 → 人工确认，且不可记忆
+        val e = engine()
+        val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("rm -rf $(echo /tmp/x)"), AgentMode.BUILD)
         assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
         assertTrue(r.rememberablePatterns.isEmpty())
     }
@@ -574,7 +591,9 @@ class ToolPermissionPolicyEngineTest {
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("git clone https://x"), AgentMode.BUILD)
         assertEquals(ToolPermissionPolicyEngine.Verdict.ASK, r.verdict)
         assertTrue(r.aiReviewable)
-        assertTrue(r.rememberablePatterns.isNotEmpty())
+        // 命令的「始终允许」记忆已下线，一律只支持单次放行
+        assertTrue(r.rememberablePatterns.isEmpty())
+        assertNotNull(r.rememberDisabledReason)
     }
 
     @Test
