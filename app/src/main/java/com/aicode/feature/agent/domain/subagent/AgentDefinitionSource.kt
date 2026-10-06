@@ -19,9 +19,13 @@ internal object AgentDefinitionDirectoryScanner {
     fun scan(provider: FileAccessProvider, root: String): List<AgentDefinition> = runCatching {
         if (!provider.isDirectory(root)) return@runCatching emptyList()
         val base = root.trimEnd('/')
-        provider.listFiles(root)
+        val paths = provider.listFiles(root)
             .filter { !it.isDirectory && it.name.endsWith(".md", ignoreCase = true) }
-            .mapNotNull { entry -> AgentDefinitionParser.parse(provider, "$base/${entry.name}") }
+            .map { "$base/${it.name}" }
+        if (paths.isEmpty()) return@runCatching emptyList()
+        // 一次批量读取（ROOT 通道一次 su 往返），替代逐个 parse 的 N 次子进程。
+        val contents = provider.readFiles(paths)
+        paths.mapNotNull { path -> contents[path]?.let { AgentDefinitionParser.parseText(it, path) } }
             .sortedBy { it.name.lowercase() }
     }.getOrElse { e ->
         FileLogger.w(TAG, "扫描子代理定义目录失败: $root", e)

@@ -86,6 +86,20 @@ interface FileAccessProvider {
     fun listFilesRecursive(path: String, maxDepth: Int): List<String>
 
     /**
+     * 批量读取多个文件全文，返回 `path -> content`；单个文件读取失败时该条目缺席（不抛）。
+     *
+     * 默认实现逐个 [readFile]。真机 ROOT / SFTP 这类「一次调用 = 一次跨进程或跨网络往返」
+     * 的通道**必须**覆写为一次往返批量取回：技能扫描、子代理扫描会一次读上百个文件，
+     * 逐个读会退化成上百次子进程 fork（每个数十~数百毫秒），直接把调用方拖到 ANR。
+     */
+    fun readFiles(paths: List<String>): Map<String, String> {
+        if (paths.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, String>(paths.size)
+        for (p in paths) runCatching { readFile(p) }.onSuccess { out[p] = it }
+        return out
+    }
+
+    /**
      * 读取文件原始字节。供 [ViewImageTool] 等需要二进制数据的工具使用。
      * 远程模式下若调用方需要本地文件路径，改用 [copyToLocal]；文件过大时抛 [RemoteOutputTooLargeException]。
      */

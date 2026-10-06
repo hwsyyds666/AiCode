@@ -53,6 +53,8 @@ class DelegatingFileAccess @Inject constructor(
     override fun listFilesRecursive(path: String, maxDepth: Int): List<String> =
         delegate().listFilesRecursive(path, maxDepth)
 
+    override fun readFiles(paths: List<String>): Map<String, String> = delegate().readFiles(paths)
+
     override fun readBytes(path: String): ByteArray = delegate().readBytes(path)
 
     override fun writeBytes(path: String, bytes: ByteArray, overwrite: Boolean) =

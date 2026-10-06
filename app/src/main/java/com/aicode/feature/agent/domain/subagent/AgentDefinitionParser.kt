@@ -20,7 +20,14 @@ object AgentDefinitionParser {
             FileLogger.w(TAG, "读取子代理定义失败: $filePath", it)
             return null
         }
+        return parseText(text, filePath)
+    }
 
+    /**
+     * 从原始 Markdown 文本解析定义（不依赖磁盘），供 [com.aicode.feature.workspace.domain.FileAccessProvider.readFiles]
+     * 批量读取后统一解析——真机 ROOT 通道下逐个 [parse] 等于每个定义文件一次 `su` 子进程。
+     */
+    fun parseText(text: String, filePath: String): AgentDefinition? {
         val (frontmatter, body) = splitAndParseFrontmatter(text)
         val prompt = body.trim()
         if (prompt.isEmpty()) return null

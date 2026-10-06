@@ -19,6 +19,7 @@ import com.aicode.core.util.toUserMessage
 import com.aicode.core.util.formatCostUsd
 import com.aicode.feature.agent.data.local.dao.AgentMessageDao
 import com.aicode.feature.agent.domain.checkpoint.CheckpointManager
+import com.aicode.feature.agent.domain.device.RootNetworkGuard
 import com.aicode.feature.agent.data.local.dao.CheckpointDao
 import com.aicode.feature.agent.data.local.dao.ChatSessionDao
 import com.aicode.feature.agent.data.local.dao.LlmCallRecordDao
@@ -152,6 +153,7 @@ class AIAgentViewModel @Inject constructor(
     private val todoItemDao: TodoItemDao,
     val fileAccess: FileAccessProvider,
     private val fileChangeHub: FileChangeHub,
+    private val rootNetworkGuard: RootNetworkGuard,
     @param:ApplicationContext private val context: Context
 ) : ViewModel(), SlashCommandContext {
 
@@ -972,6 +974,9 @@ class AIAgentViewModel @Inject constructor(
      */
     private fun acquireKeepalive() {
         TerminalKeepaliveService.startSession(context)
+        // 有 ROOT 时顺带解除系统侧的后台网络限制（netpolicy/standby/appops）；
+        // 无 ROOT 静默跳过。走 IO 线程：内部要 fork su 子进程，不能碰主线程。
+        viewModelScope.launch(Dispatchers.IO) { rootNetworkGuard.applyIfRooted() }
         if (wakeLock.isHeld) return
         runCatching { wakeLock.acquire(KEEPALIVE_TIMEOUT_MS) }
             .onFailure { FileLogger.e(TAG, "acquire wakeLock failed", it) }

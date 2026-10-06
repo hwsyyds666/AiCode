@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import retrofit2.HttpException
 import retrofit2.await
 import java.io.IOException
@@ -24,6 +25,10 @@ import javax.net.ssl.SSLException
 import kotlin.coroutines.coroutineContext
 import kotlin.math.min
 import kotlin.math.pow
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 
 /**
  * 参考 opencode 的网络请求重试策略：指数退避，仅针对瞬时故障。

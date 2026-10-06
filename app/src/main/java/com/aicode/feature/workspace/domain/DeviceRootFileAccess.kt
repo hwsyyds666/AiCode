@@ -66,6 +66,9 @@ class DeviceRootFileAccess @Inject constructor(
         /** 目录列举超时（毫秒）：大目录逐项 stat 较慢，放宽。 */
         const val LIST_TIMEOUT_MS = 120_000L
 
+        /** 批量读取每批文件数：按单文件 8MB 上限保守取小值，保证单批输出不撞 [MAX_OUTPUT_BYTES]。 */
+        const val BATCH_READ_CHUNK = 32
+
         val STDIN_FROM_DEV_NULL: ProcessBuilder.Redirect =
             ProcessBuilder.Redirect.from(File("/dev/null"))
 
@@ -210,6 +213,51 @@ class DeviceRootFileAccess @Inject constructor(
         val clean = r.output.filter { !it.isWhitespace() }
         return runCatching { Base64.decode(clean, Base64.DEFAULT) }
             .getOrElse { throw IOException("base64 解码失败: $path (${it.message})") }
+    }
+
+    /**
+     * 批量读取：一次 `su -c` 子进程取回整批文件内容（`path` 行 + base64 行交替输出）。
+     *
+     * 真机通道每次 [sh] 都要 fork 一个 su 进程（数十~数百毫秒），逐个 [readFile] 在读上百个
+     * 技能文件时会退化成上百次往返——那才是技能扫描把主线程拖到 ANR 的根因，而不是文件本身大。
+     * 分批只为避开单次输出上限 [MAX_OUTPUT_BYTES]（base64 会把体积放大约 1/3）。
+     */
+    override fun readFiles(paths: List<String>): Map<String, String> {
+        if (paths.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, String>(paths.size)
+        paths.chunked(BATCH_READ_CHUNK).forEach { chunk -> out.putAll(readFilesChunk(chunk)) }
+        return out
+    }
+
+    private fun readFilesChunk(paths: List<String>): Map<String, String> {
+        val realPaths = paths.map { resolve(it) }
+        val r = sh(
+            "while IFS= read -r p; do " +
+                "printf '%s\\n' \"\$p\"; " +
+                "sz=\$(stat -c %s \"\$p\" 2>/dev/null) || { printf '\\n'; continue; }; " +
+                "[ \"\$sz\" -gt $MAX_READ_BYTES ] && { printf '\\n'; continue; }; " +
+                "base64 < \"\$p\" 2>/dev/null | tr -d '\\n'; printf '\\n'; " +
+                "done",
+            stdin = realPaths.joinToString("\n").toByteArray(Charsets.UTF_8),
+            timeoutMs = LIST_TIMEOUT_MS
+        )
+        // 输出按「真实路径行 + base64 行」成对排列，与输入顺序一致；读失败时为空白行，跳过即可。
+        val lines = r.output.lineSequence().toList()
+        val byRealPath = LinkedHashMap<String, String>(lines.size / 2)
+        var i = 0
+        while (i + 1 < lines.size) {
+            val key = lines[i]
+            val encoded = lines[i + 1].filter { !it.isWhitespace() }
+            i += 2
+            if (encoded.isEmpty()) continue
+            val bytes = runCatching { Base64.decode(encoded, Base64.DEFAULT) }.getOrNull() ?: continue
+            byRealPath[key] = String(bytes, Charsets.UTF_8)
+        }
+        val out = LinkedHashMap<String, String>(paths.size)
+        paths.forEachIndexed { index, path ->
+            byRealPath[realPaths[index]]?.let { out[path] = it }
+        }
+        return out
     }
 
     override fun exists(path: String): Boolean = testFlag(resolve(path), "-e")

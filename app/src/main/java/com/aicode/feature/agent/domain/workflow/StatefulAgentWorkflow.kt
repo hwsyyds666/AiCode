@@ -517,7 +517,10 @@ class StatefulAgentWorkflow @Inject constructor(
             )
         )
 
-        val systemPrompt = promptProvider.build(currentContext)
+        // 构建系统提示词会扫描 Skill / 规则 / 记忆目录，在真机 ROOT 通道下这些文件读写是通过
+        // `su -c` 子进程 + Process.waitFor() 完成的，属于阻塞式 IO，必须切到 IO 线程；
+        // 否则主线程会被 waitFor() 卡住直到 ANR、进程被系统杀掉（表现为闪退）。
+        val systemPrompt = withContext(Dispatchers.IO) { promptProvider.build(currentContext) }
         val aiProvider = getEffectiveProvider(currentContext.sessionId)
         // 压缩失败后本轮（本次用户请求内）不再重复尝试压缩，避免每次 LLM 调用都白试一次。
         var compactionAttemptFailed = false
