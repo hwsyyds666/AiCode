@@ -48,11 +48,15 @@ jobs:
           java-version: '17'
 
       # runner 预装 SDK 只到 android-36，compileSdk 已升 37（PrismalAGSL 要求），需补装平台。
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # 不用 android-actions/setup-android：它内部执行已废弃的 `sdkmanager tools` 必崩。
       - name: Install Android platform 37 & build-tools 36
-        run: sdkmanager --install "platforms;android-37" "build-tools;36.0.0"
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SM="$SDK/cmdline-tools/16.0/bin/sdkmanager"
+          [ -x "$SM" ] || SM="$(command -v sdkmanager)"
+          echo "sdkmanager=$SM  sdk_root=$SDK"
+          yes | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
