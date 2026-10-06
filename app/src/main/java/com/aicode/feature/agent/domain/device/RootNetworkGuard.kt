@@ -157,8 +157,12 @@ class RootNetworkGuard @Inject constructor(
         /** 单条脚本超时：`cmd netpolicy` 偶发卡顿，给足但不至于拖住任务启动。 */
         const val TIMEOUT_MS = 15_000L
 
-        /** 节流间隔：只决定多久重新布置一次守护，守护自身会持续维持。 */
-        const val APPLY_INTERVAL_MS = 5 * 60 * 1000L
+        /**
+         * 节流间隔：只决定多久重新「校验并补拉」一次守护，守护自身在此期间持续维持。
+         * 不能太长——守护有可能被系统清理，间隔过长会留出一个无人维持的空窗；
+         * 脚本本身幂等（marker 保单实例）且耗时不足 1 秒，1 分钟校验一次足够廉价。
+         */
+        const val APPLY_INTERVAL_MS = 60 * 1000L
 
         /** 守护脚本落盘路径。 */
         const val GUARD_PATH = "/data/local/tmp/.aicode_guard.sh"
