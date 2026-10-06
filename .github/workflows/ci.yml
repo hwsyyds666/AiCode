@@ -60,9 +60,16 @@ jobs:
           if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37.0" "build-tools;36.0.0"; then
             yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
           fi
-          # AGP 找的是 platforms/android-37 目录，而平台装成了 android-37.0，补软链
-          if [ -d "$SDK/platforms/android-37.0" ] && [ ! -e "$SDK/platforms/android-37" ]; then
-            ln -s "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"               || cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
+          # AGP 校验 platforms/android-37 的 ApiLevel 必须为 37；runner 预装的该目录
+          # 实际装的是 37.0（inconsistent location），需清掉后从 37.0 复制并改成 37。
+          if [ -f "$SDK/platforms/android-37/source.properties" ]; then
+            API="$(grep -E '^AndroidVersion.ApiLevel=' "$SDK/platforms/android-37/source.properties" | cut -d= -f2 || true)"
+            echo "platforms/android-37 现有 ApiLevel=$API"
+            if [ "$API" != "37" ]; then rm -rf "$SDK/platforms/android-37"; fi
+          fi
+          if [ ! -d "$SDK/platforms/android-37" ] && [ -d "$SDK/platforms/android-37.0" ]; then
+            cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
+            sed -i -e 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/'                    -e '/^AndroidVersion\.ExtensionLevel=/d' "$SDK/platforms/android-37/source.properties"
           fi
           ls -1 "$SDK/platforms" 2>/dev/null | grep -E "android-3[5-9]" || true
 
