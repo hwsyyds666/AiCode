@@ -22,7 +22,7 @@ Android 上的通用 AI Coding Agent · Linux 开发环境 · 支持本地与远
 
 </div>
 
-<br/>
+<div align="center">
 
 > **关于本仓库**
 > 本项目是基于原作者 [jieapi/AiCode](https://github.com/jieapi/aicode) 的二次开发分支，在原项目基础上新增了 **Liquid Glass 液态玻璃 UI**、**AI 待办任务显示位置偏好**、**悬浮玻璃标题栏**等功能，并修复了容器通道与性能问题。
@@ -32,28 +32,19 @@ Android 上的通用 AI Coding Agent · Linux 开发环境 · 支持本地与远
 
 ## 预览
 
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <img src="docs/screenshots/home.png" alt="AI 对话界面" />
-      <br/><b>AI 对话</b><br/><sub>流式输出 · 实时 Markdown 渲染</sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="docs/screenshots/git.png" alt="Git 提交历史" />
-      <br/><b>Git 集成</b><br/><sub>状态 · 分支 · 提交历史 · 差异</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <img src="docs/screenshots/container.png" alt="容器与镜像管理" />
-      <br/><b>容器与镜像</b><br/><sub>内置 Alpine · 自定义 rootfs</sub>
-    </td>
-    <td align="center" width="50%">
-      <img src="docs/screenshots/models.png" alt="多供应商模型管理" />
-      <br/><b>模型管理</b><br/><sub>多供应商 · 多 Key 轮换</sub>
-    </td>
-  </tr>
-</table>
+<p>
+  <img src="docs/screenshots/providers.jpg" width="31%" alt="AI 供应商" />
+  <img src="docs/screenshots/models-edit.jpg" width="31%" alt="模型管理" />
+  <img src="docs/screenshots/prompts.jpg" width="31%" alt="提示词库" />
+  <br/><b>多供应商管理 · 模型配置 · 提示词库</b>
+</p>
+
+<p>
+  <img src="docs/screenshots/chat-image.jpg" width="31%" alt="AI 对话与图片生成" />
+  <img src="docs/screenshots/chat-tools.jpg" width="31%" alt="工具调用与确认" />
+  <img src="docs/screenshots/settings.jpg" width="31%" alt="设置" />
+  <br/><b>AI 对话 · 图片生成 · 工具授权 · 个性化设置</b>
+</p>
 
 ---
 
@@ -260,6 +251,8 @@ AiCode
 ## 开源协议
 
 本项目基于 [GPL-3.0](LICENSE) 协议开源，第三方组件的版权声明详见 [NOTICE](NOTICE)。
+
+</div>
 
 <div align="center">
 
