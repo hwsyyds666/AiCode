@@ -12,13 +12,13 @@ Android 上的通用 AI Coding Agent · Linux 开发环境 · 支持本地与远
 
 <br/>
 
-[![License](https://img.shields.io/github/license/hwsyyds666/AiCode?color=blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/hwsyyds666/AiCode/releases/latest)
-[![Release](https://img.shields.io/github/v/release/hwsyyds666/AiCode?include_prereleases&display_name=tag&color=orange)](https://github.com/hwsyyds666/AiCode/releases)
-[![Stars](https://img.shields.io/github/stars/hwsyyds666/AiCode?style=flat&color=yellow)](https://github.com/hwsyyds666/AiCode/stargazers)
-[![Forks](https://img.shields.io/github/forks/hwsyyds666/AiCode?style=flat)](https://github.com/hwsyyds666/AiCode/forks)
+[![License](https://img.shields.io/github/license/hwsyyds666/Aicode-Glass?color=blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/hwsyyds666/Aicode-Glass/releases/latest)
+[![Release](https://img.shields.io/github/v/release/hwsyyds666/Aicode-Glass?include_prereleases&display_name=tag&color=orange)](https://github.com/hwsyyds666/Aicode-Glass/releases)
+[![Stars](https://img.shields.io/github/stars/hwsyyds666/Aicode-Glass?style=flat&color=yellow)](https://github.com/hwsyyds666/Aicode-Glass/stargazers)
+[![Forks](https://img.shields.io/github/forks/hwsyyds666/Aicode-Glass?style=flat)](https://github.com/hwsyyds666/Aicode-Glass/forks)
 
-[快速开始](#快速开始) · [功能特性](#功能特性) · [使用文档](https://aicode.murk.top) · [下载](https://github.com/hwsyyds666/AiCode/releases/latest) · [反馈](#反馈与贡献)
+[快速开始](#快速开始) · [功能特性](#功能特性) · [使用文档](https://aicode.murk.top) · [下载](https://github.com/hwsyyds666/Aicode-Glass/releases/latest) · [反馈](#反馈与贡献)
 
 </div>
 
@@ -183,7 +183,7 @@ flowchart LR
 
 **1. 下载安装**
 
-前往 [GitHub Releases](https://github.com/hwsyyds666/AiCode/releases/latest) 下载对应安装包：
+前往 [GitHub Releases](https://github.com/hwsyyds666/Aicode-Glass/releases/latest) 下载对应安装包：
 
 | 安装包 | 适用设备 |
 | :-- | :-- |
@@ -202,7 +202,7 @@ flowchart LR
 ## 从源码构建
 
 ```bash
-git clone https://github.com/hwsyyds666/AiCode.git
+git clone https://github.com/hwsyyds666/Aicode-Glass.git
 cd AiCode
 ./gradlew assembleDebug
 ```
@@ -225,19 +225,19 @@ AiCode
 
 如果 AiCode 对你有帮助，欢迎点一个 ⭐ Star，让更多开发者看到这个项目。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=hwsyyds666/AiCode&type=Date)](https://www.star-history.com/#hwsyyds666/AiCode&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=hwsyyds666/Aicode-Glass&type=Date)](https://www.star-history.com/#hwsyyds666/Aicode-Glass&Date)
 
 ## 反馈与贡献
 
-- 🐞 **Bug 反馈**：到 [Issues](https://github.com/hwsyyds666/AiCode/issues) 提交，请附上复现步骤、设备型号与系统版本，便于定位
-- 💡 **功能建议**：想加新功能或改进，欢迎先在 [Issues](https://github.com/hwsyyds666/AiCode/issues) 讨论
-- 🔧 **贡献代码**：欢迎提交 [Pull Request](https://github.com/hwsyyds666/AiCode/pulls)
+- 🐞 **Bug 反馈**：到 [Issues](https://github.com/hwsyyds666/Aicode-Glass/issues) 提交，请附上复现步骤、设备型号与系统版本，便于定位
+- 💡 **功能建议**：想加新功能或改进，欢迎先在 [Issues](https://github.com/hwsyyds666/Aicode-Glass/issues) 讨论
+- 🔧 **贡献代码**：欢迎提交 [Pull Request](https://github.com/hwsyyds666/Aicode-Glass/pulls)
 - 💬 **交流群**：原项目 [AiCode QQ 交流群](https://qm.qq.com/q/ByvqODJdIs)（群号：1107110698），可交流使用心得
 
 ### 贡献者
 
-<a href="https://github.com/hwsyyds666/AiCode/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=hwsyyds666/AiCode" alt="Contributors" />
+<a href="https://github.com/hwsyyds666/Aicode-Glass/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=hwsyyds666/Aicode-Glass" alt="Contributors" />
 </a>
 
 ## 致谢

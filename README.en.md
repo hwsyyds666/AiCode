@@ -19,7 +19,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License GPL-3.0" /></a>
   <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Android Platform" />
-  <a href="https://github.com/hwsyyds666/AiCode/releases"><img src="https://img.shields.io/github/v/release/hwsyyds666/AiCode?display_name=tag&include_prereleases" alt="Latest Release" /></a>
+  <a href="https://github.com/hwsyyds666/Aicode-Glass/releases"><img src="https://img.shields.io/github/v/release/hwsyyds666/Aicode-Glass?display_name=tag&include_prereleases" alt="Latest Release" /></a>
 </p>
 
 <p align="center">
@@ -104,14 +104,14 @@ There is nothing to set up beforehand: install the app, configure a model under 
 | Item | Description |
 |------|-------------|
 | System requirements | Android 8.0+ (API 26), arm64-v8a / x86_64 |
-| Download | [GitHub Releases](https://github.com/hwsyyds666/AiCode/releases/latest): pick `armsolo` for real devices, `x86solo` for emulators, `universal` for both |
+| Download | [GitHub Releases](https://github.com/hwsyyds666/Aicode-Glass/releases/latest): pick `armsolo` for real devices, `x86solo` for emulators, `universal` for both |
 | Quick start | Settings → AI Vendors to add a model → Container & Images to pick local or SSH → new session and chat |
-| Changelog | [Releases](https://github.com/hwsyyds666/AiCode/releases) (all versions & notes) |
+| Changelog | [Releases](https://github.com/hwsyyds666/Aicode-Glass/releases) (all versions & notes) |
 | User guide | [Online docs](https://aicode.murk.top): quick start, user manual and advanced guides (same content as the in-app docs) |
 
 ## Star
 
-If AiCode is helpful to you, give it a [Star](https://github.com/hwsyyds666/AiCode) — it helps more developers discover the project.
+If AiCode is helpful to you, give it a [Star](https://github.com/hwsyyds666/Aicode-Glass) — it helps more developers discover the project.
 
 ## Star History
 
@@ -126,9 +126,9 @@ If AiCode is helpful to you, give it a [Star](https://github.com/hwsyyds666/AiCo
 ## Feedback & Contribution
 
 - **QQ group**: join the [AiCode QQ group](https://qm.qq.com/q/ByvqODJdIs) (group number: 1107110698) to share tips and feedback
-- **Bug reports**: open an [Issue](https://github.com/hwsyyds666/AiCode/issues) with reproduction steps, device model and OS version
-- **Feature requests**: discuss your ideas in [Issues](https://github.com/hwsyyds666/AiCode/issues)
-- **Contributing**: submit a [Pull Request](https://github.com/hwsyyds666/AiCode/pulls)
+- **Bug reports**: open an [Issue](https://github.com/hwsyyds666/Aicode-Glass/issues) with reproduction steps, device model and OS version
+- **Feature requests**: discuss your ideas in [Issues](https://github.com/hwsyyds666/Aicode-Glass/issues)
+- **Contributing**: submit a [Pull Request](https://github.com/hwsyyds666/Aicode-Glass/pulls)
 
 ## Acknowledgements
 
