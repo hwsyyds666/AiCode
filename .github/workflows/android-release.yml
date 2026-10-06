@@ -43,42 +43,29 @@ jobs:
         run: |
           set -e
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "ANDROID_HOME=${ANDROID_HOME:-unset} ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset} SDK=$SDK"
-          ls -1 "$SDK" 2>/dev/null || true
-          ls -1 "$SDK/cmdline-tools" 2>/dev/null || true
           SM=""
-          for c in "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/cmdline-tools/16.0/bin/sdkmanager" \
-                   "$SDK/cmdline-tools/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"; do
+          for c in "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/cmdline-tools/16.0/bin/sdkmanager"; do
             if [ -x "$c" ]; then SM="$c"; break; fi
           done
           if [ -z "$SM" ]; then SM="$(command -v sdkmanager 2>/dev/null || true)"; fi
           echo "sdkmanager=$SM"
           if [ -z "$SM" ]; then echo "::error::sdkmanager not found"; exit 1; fi
-          # Android 17 的平台包名是 platforms;android-37.0（本地目录名同为 android-37.0），
-          # 直接装 platforms;android-37 会 "Failed to find package"，故先试 .0 再回退。
-          if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37.0" "build-tools;36.0.0"; then
-            echo "::warning::platforms;android-37.0 安装失败，回退 platforms;android-37"
-            yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
-          fi
-          # AGP 按 compileSdk=37 去找 platforms/android-37。runner 预装的该目录装的是 37.0 的包
-          # （package.xml 里 path 仍是 platforms;android-37.0），sdkmanager/AGP 判定为
-          # "inconsistent location" 直接忽略该目录 → "Failed to find Platform SDK"。
-          # 处理：清掉错位目录，从 android-37.0 重建一份「名副其实」的 android-37
-          # —— 连 package.xml 里的包路径一起改掉，否则仍会被当作错位而忽略。
+          yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "build-tools;36.0.0"
+          # 远端已无 platforms;android-37（Android 17 平台更名 android-37.0/37.1/37.2），
+          # 本地开发机留有当年安装的官方 Platform 37 包（api-level=37 rev=2）。
+          # 任何"从 37.0 改元数据"的仿制品都过不了 AGP 校验：
+          #   package.xml path=37.0 -> inconsistent location，目录整体被忽略；
+          #   source.properties ApiLevel=37.0 -> 平台解析成 API 0；
+          #   两者都删 -> AGP 没有注册表可查，Failed to find Platform SDK。
+          # 该真包已作为 asset 附在 v1.0.1 Release（android-platform-37.zip），
+          # 直接下载解压，与本地可编译形态 1:1 一致。
           rm -rf "$SDK/platforms/android-37"
-          if [ -d "$SDK/platforms/android-37.0" ]; then
-            cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
-            # 与本地开发机保持一致：android-37 目录不带 package.xml / source.properties，
-            # AGP 直接从 build.prop 读 API 级别。
-            #   带 package.xml（path 仍是 platforms;android-37.0）→ 判 inconsistent location，目录被整个忽略；
-            #   带 37.0 的 source.properties → 平台被解析成 API 0，92 个依赖全报
-            #   "requires ... compile against version 1 or later"。
-            rm -f "$SDK/platforms/android-37/package.xml" "$SDK/platforms/android-37/source.properties"
-          fi
+          curl -sSL --retry 3 -o /tmp/android-37.zip             "https://github.com/hwsyyds666/AiCode/releases/download/v1.0.1/android-platform-37.zip"
+          unzip -q -o /tmp/android-37.zip -d "$SDK/platforms/"
+          rm -f /tmp/android-37.zip
           echo "--- platforms ---"
-          ls -1 "$SDK/platforms" 2>/dev/null | grep -E "android-3[5-9]" || true
-          grep -E "^ro.build.version.sdk=" "$SDK/platforms/android-37/build.prop" || true
-          "$SM" --sdk_root="$SDK" --list_installed 2>/dev/null | grep -E "android-37|build-tools;36" || true
+          ls -1 "$SDK/platforms" | grep -E "android-3[5-9]" || true
+          grep -E "^ro.build.version.sdk=" "$SDK/platforms/android-37/build.prop"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
