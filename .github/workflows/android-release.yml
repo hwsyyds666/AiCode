@@ -60,24 +60,28 @@ jobs:
             echo "::warning::platforms;android-37.0 安装失败，回退 platforms;android-37"
             yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
           fi
-          # AGP 按 compileSdk=37 去找 platforms/android-37，且校验其 source.properties 的
-          # AndroidVersion.ApiLevel 必须等于 37。runner 预装的 android-37 目录里其实装的是
-          # 37.0 的包（sdkmanager 会警告 "inconsistent location"），校验不过 →
-          # "Failed to find Platform SDK with path: platforms;android-37"。
-          # 处理：清掉这个错位目录，再把 android-37.0 复制为 android-37 并把 ApiLevel 改成 37。
-          if [ -f "$SDK/platforms/android-37/source.properties" ]; then
-            API="$(grep -E '^AndroidVersion.ApiLevel=' "$SDK/platforms/android-37/source.properties" | cut -d= -f2 || true)"
-            echo "platforms/android-37 现有 ApiLevel=$API"
-            if [ "$API" != "37" ]; then rm -rf "$SDK/platforms/android-37"; fi
-          fi
-          if [ ! -d "$SDK/platforms/android-37" ] && [ -d "$SDK/platforms/android-37.0" ]; then
+          # AGP 按 compileSdk=37 去找 platforms/android-37。runner 预装的该目录装的是 37.0 的包
+          # （package.xml 里 path 仍是 platforms;android-37.0），sdkmanager/AGP 判定为
+          # "inconsistent location" 直接忽略该目录 → "Failed to find Platform SDK"。
+          # 处理：清掉错位目录，从 android-37.0 重建一份「名副其实」的 android-37
+          # —— 连 package.xml 里的包路径一起改掉，否则仍会被当作错位而忽略。
+          rm -rf "$SDK/platforms/android-37"
+          if [ -d "$SDK/platforms/android-37.0" ]; then
             cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
-            sed -i -e 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' \
-                   -e '/^AndroidVersion\.ExtensionLevel=/d' "$SDK/platforms/android-37/source.properties"
+            if [ -f "$SDK/platforms/android-37/package.xml" ]; then
+              sed -i -e 's#path="platforms;android-37\.0"#path="platforms;android-37"#' \
+                     -e 's#<id>android-37\.0</id>#<id>android-37</id>#g' \
+                     "$SDK/platforms/android-37/package.xml"
+            fi
+            if [ -f "$SDK/platforms/android-37/source.properties" ]; then
+              sed -i -e 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' \
+                     -e '/^AndroidVersion\.ExtensionLevel=/d' "$SDK/platforms/android-37/source.properties"
+            fi
           fi
           echo "--- platforms ---"
           ls -1 "$SDK/platforms" 2>/dev/null | grep -E "android-3[5-9]" || true
-          grep -E "^(AndroidVersion.ApiLevel|Platform.Version)=" "$SDK/platforms/android-37/source.properties" || true
+          grep -o 'path="platforms;android-37[^"]*"' "$SDK/platforms/android-37/package.xml" | head -2 || true
+          grep -E "^AndroidVersion.ApiLevel=" "$SDK/platforms/android-37/source.properties" || true
           "$SM" --sdk_root="$SDK" --list_installed 2>/dev/null | grep -E "android-37|build-tools;36" || true
 
       - name: Set up Gradle
