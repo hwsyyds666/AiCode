@@ -54,10 +54,11 @@ jobs:
           if [ -z "$SM" ]; then SM="$(command -v sdkmanager 2>/dev/null || true)"; fi
           echo "sdkmanager=$SM"
           if [ -z "$SM" ]; then echo "::error::sdkmanager not found"; exit 1; fi
-          if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"; then
-            echo "::error::sdkmanager install failed; 远端可用 platform 版本："
-            "$SM" --sdk_root="$SDK" --list 2>/dev/null | grep -oE "platforms;android-[0-9]+" | sort -u | tail -8 || true
-            exit 1
+          # Android 17 的平台包名是 platforms;android-37.0（本地目录名同为 android-37.0），
+          # 直接装 platforms;android-37 会 "Failed to find package"，故先试 .0 再回退。
+          if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37.0" "build-tools;36.0.0"; then
+            echo "::warning::platforms;android-37.0 安装失败，回退 platforms;android-37"
+            yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
           fi
           "$SM" --sdk_root="$SDK" --list_installed 2>/dev/null | grep -E "android-37|build-tools;36" || true
 

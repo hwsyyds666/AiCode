@@ -56,7 +56,10 @@ jobs:
           SM="$SDK/cmdline-tools/16.0/bin/sdkmanager"
           [ -x "$SM" ] || SM="$(command -v sdkmanager)"
           echo "sdkmanager=$SM  sdk_root=$SDK"
-          yes | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
+          # 平台包名是 platforms;android-37.0（目录名 android-37.0），先试 .0 再回退
+          if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37.0" "build-tools;36.0.0"; then
+            yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
+          fi
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
