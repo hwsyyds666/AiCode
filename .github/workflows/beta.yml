@@ -54,6 +54,11 @@ jobs:
           if ! yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37.0" "build-tools;36.0.0"; then
             yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
           fi
+          # AGP 找的是 platforms/android-37 目录，而平台装成了 android-37.0，补软链
+          if [ -d "$SDK/platforms/android-37.0" ] && [ ! -e "$SDK/platforms/android-37" ]; then
+            ln -s "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"               || cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
+          fi
+          ls -1 "$SDK/platforms" 2>/dev/null | grep -E "android-3[5-9]" || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

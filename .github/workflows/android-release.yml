@@ -60,6 +60,13 @@ jobs:
             echo "::warning::platforms;android-37.0 安装失败，回退 platforms;android-37"
             yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "platforms;android-37" "build-tools;36.0.0"
           fi
+          # AGP 按 compileSdk=37 去找 platforms/android-37 目录，而平台实际装成 android-37.0；
+          # 缺该目录时 Gradle 直接 "Failed to find Platform SDK with path: platforms;android-37"。
+          if [ -d "$SDK/platforms/android-37.0" ] && [ ! -e "$SDK/platforms/android-37" ]; then
+            ln -s "$SDK/platforms/android-37.0" "$SDK/platforms/android-37" \
+              || cp -r "$SDK/platforms/android-37.0" "$SDK/platforms/android-37"
+          fi
+          ls -1 "$SDK/platforms" 2>/dev/null | grep -E "android-3[5-9]" || true
           "$SM" --sdk_root="$SDK" --list_installed 2>/dev/null | grep -E "android-37|build-tools;36" || true
 
       - name: Set up Gradle
