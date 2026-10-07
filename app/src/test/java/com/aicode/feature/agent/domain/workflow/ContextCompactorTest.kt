@@ -140,28 +140,66 @@ class ContextCompactorTest {
     }
 
     @Test
-    fun invalidResponsesDoNotCommitAndCountFailedCalls() = runTest {
+    fun unusableResponsesFallBackToLocalTrimWithoutCommitting() = runTest {
         prepare()
-        for (response in listOf(AIResponse(""), AIResponse("partial", stopReason = "length"), AIResponse("blocked", stopReason = "refusal"))) {
+        for (response in listOf(AIResponse(""), AIResponse("blocked", stopReason = "refusal"))) {
             coEvery { provider.complete(any(), any(), any(), any()) } returns response
             val original = history()
+            val before = CompactionText.estimateRequest("", emptyList(), original)
             val result = compactor.compactIfNeeded(original, provider, force = true)
-            assertFalse(result.compacted)
-            assertSame(original, result.messages)
+            // 摘要不可用时必须退化为本地裁剪，保证上下文确实变小；
+            // 若原样返回，上下文不变会在下一轮再次触发压缩，表现为长时间卡在压缩上。
+            assertTrue(result.compacted)
+            assertTrue(CompactionText.estimateRequest("", emptyList(), result.messages) < before)
         }
-        coVerify(exactly = 3) { records.insert(match { it.status == "error" }) }
+        coVerify(exactly = 2) { records.insert(match { it.status == "error" }) }
         coVerify(exactly = 0) { dao.commitCompaction(any(), any(), any(), any()) }
     }
 
     @Test
-    fun blockLimitReturnsOriginalWithoutCommitting() = runTest {
-        prepare(2_000)
-        val original = history(100_000)
-        val result = compactor.compactIfNeeded(original, provider, force = true)
-        assertFalse(result.compacted)
-        assertSame(original, result.messages)
-        coVerify(atMost = 32) { provider.complete(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { dao.commitCompaction(any(), any(), any(), any()) }
+    fun truncatedSummaryIsKeptRatherThanDiscarded() = runTest {
+        prepare()
+        coEvery { provider.complete(any(), any(), any(), any()) } returns AIResponse("partial handoff", stopReason = "length")
+        val result = compactor.compactIfNeeded(history(), provider, force = true)
+        assertTrue(result.compacted)
+        assertTrue(result.messages.any { it is AgentMessage.AssistantMessage && it.content == "partial handoff" })
+        coVerify(exactly = 0) { records.insert(match { it.status == "error" }) }
+    }
+
+    @Test
+    fun localTrimPersistsWhenModelFails() = runTest {
+        prepare()
+        coEvery { dao.getMessagesBySessionOnce("session") } returns listOf(
+            AgentMessageEntity(id = "old", sessionId = "session", role = "USER", content = "history", timestamp = 50),
+            AgentMessageEntity(id = "answer", sessionId = "session", role = "ASSISTANT", content = "done", timestamp = 200),
+            AgentMessageEntity(id = "goal", sessionId = "session", role = "USER", content = "goal", timestamp = 100)
+        )
+        coEvery { provider.complete(any(), any(), any(), any()) } returns AIResponse("")
+        val result = compactor.compactIfNeeded(history(), provider, sessionId = "session", force = true)
+        assertTrue(result.compacted)
+        coVerify(exactly = 1) { dao.commitCompaction("session", listOf("old"), any(), any()) }
+        coVerify(exactly = 1) { persistence.invalidateHistory("session") }
+    }
+
+    @Test
+    fun repeatedFailuresEnterCooldownAndStopCallingModel() = runTest {
+        prepare()
+        coEvery { provider.complete(any(), any(), any(), any()) } returns AIResponse("")
+        repeat(3) { compactor.compactIfNeeded(history(), provider, force = true) }
+        coVerify(exactly = 3) { provider.complete(any(), any(), any(), any()) }
+        val cooled = compactor.compactIfNeeded(history(), provider, force = true)
+        assertTrue(cooled.compacted)
+        coVerify(exactly = 3) { provider.complete(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun summaryTimeoutCountsAsFailureAndTrims() = runTest {
+        prepare()
+        coEvery { provider.complete(any(), any(), any(), any()) } coAnswers { kotlinx.coroutines.delay(120_000) ; AIResponse("late") }
+        val before = CompactionText.estimateRequest("", emptyList(), history())
+        val result = compactor.compactIfNeeded(history(), provider, force = true)
+        assertTrue(result.compacted)
+        assertTrue(CompactionText.estimateRequest("", emptyList(), result.messages) < before)
     }
 
     @Test
