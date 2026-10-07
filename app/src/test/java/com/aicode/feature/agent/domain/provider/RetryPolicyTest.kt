@@ -273,4 +273,29 @@ class RetryPolicyTest {
         assertNull(IOException().toRetryErrorInfo().statusCode)
         assertNull(StreamApiException("server_is_overloaded", "m").toRetryErrorInfo().statusCode)
     }
+
+    // ── 重试间隔：固定 3 秒，不再指数退避 ────────────────────────────────
+
+    @Test
+    fun retryDelayIsFixedThreeSeconds() {
+        // 网络类失败：无论第几次重试都等 3 秒（原来是 0.5→1→2→4→8→10 秒）
+        for (index in 0 until 6) {
+            assertEquals(3_000L, retryDelayMillis(index, SocketTimeoutException()))
+            assertEquals(3_000L, retryDelayMillis(index, ConnectException()))
+        }
+    }
+
+    @Test
+    fun retryDelayCapsLongServerRetryAfter() {
+        // 服务端要求等 23 秒时不再照做，封顶 3 秒
+        val e = StreamApiException("rate_limit_exceeded", "retry in 23s", retryAfterMillis = 23_000L)
+        assertEquals(3_000L, retryDelayMillis(0, e))
+    }
+
+    @Test
+    fun retryDelayHonorsShorterServerRetryAfter() {
+        // 服务端要求的时间比 3 秒更短时听它的
+        val e = StreamApiException("rate_limit_exceeded", "retry in 1s", retryAfterMillis = 1_000L)
+        assertEquals(1_000L, retryDelayMillis(0, e))
+    }
 }

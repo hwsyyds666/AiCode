@@ -175,15 +175,13 @@ class ToolPermissionPolicyEngine @Inject constructor(
 
         val level = toolSafetySettings.getCommandAuthLevel()
         return if (isShellTool(toolName, args)) {
-            // 仅「规则拦截」挡位需要高危规则集；「完全权限」需要安全开关决定是否保留兜底拦截。
+            // 仅「规则拦截」挡位需要高危规则集；「完全权限」不再读安全开关（见 evaluateShell）。
             val highRiskRules = if (level == CommandAuthLevel.RULE_BASED) highRiskRulesRepo.getRulesOnce() else emptyList()
-            val safetyDisabled = level == CommandAuthLevel.FULL_ACCESS && toolSafetySettings.isSafetyInterceptionDisabled()
             evaluateShell(
                 args,
                 forceAsk = toolName == SHIZUKU_TOOL,
                 level = level,
-                highRiskRules = highRiskRules,
-                safetyDisabled = safetyDisabled
+                highRiskRules = highRiskRules
             )
         } else {
             evaluateGeneric(toolName, capabilities, level)
@@ -405,8 +403,7 @@ class ToolPermissionPolicyEngine @Inject constructor(
         args: Map<String, JsonElement>,
         forceAsk: Boolean = false,
         level: CommandAuthLevel,
-        highRiskRules: List<HighRiskRule>,
-        safetyDisabled: Boolean
+        highRiskRules: List<HighRiskRule>
     ): EvalResult {
         val command = ((args["command"] ?: args["input"]) as? JsonPrimitive)?.content
             ?: return EvalResult(Verdict.ASK, emptyList())
@@ -437,15 +434,13 @@ class ToolPermissionPolicyEngine @Inject constructor(
         //    注：旧的「项目/全局」记忆规则（ALLOW/DENY）已整体下线——它会先于挡位生效，
         //    等于绕过高危拦截规则；现在授权口径统一由三挡位 + 高危规则决定。
         return when (level) {
-            // 完全权限：灾难防护之上直接放行；未开「禁用安全拦截」时，
-            // 不可静态判定且疑似破坏性的命令仍按提权流程拦一次。
-            CommandAuthLevel.FULL_ACCESS -> {
-                if (!safetyDisabled && !analysis.analyzable && looksDestructive(command)) {
-                    elevationOrDeny(REASON_UNANALYZABLE_DESTRUCTIVE, args)
-                } else {
-                    EvalResult(Verdict.ALLOW, emptyList())
-                }
-            }
+            // 完全权限：灾难防护（步骤 0 的 checkCatastrophicRm）之上**一律直接放行**。
+            // 此前这里还有一道「不可静态判定且疑似破坏性 → 拦一次」的兜底，但它依据
+            // [looksDestructive]：只要命令里出现任何一个 `>` 就命中，连 `2>/dev/null`
+            // 这种丢弃输出的写法也算。AI 排查类命令几乎条条带 `$()`/`2>/dev/null`，
+            // 结果大量与删除无关的命令被硬拒绝（elevationOrDeny 无弹窗、直接失败），
+            // 与「完全权限」的语义矛盾。用户既然选了这一挡，就按其字面执行。
+            CommandAuthLevel.FULL_ACCESS -> EvalResult(Verdict.ALLOW, emptyList())
 
             // 规则拦截：命中高危规则 → 人工确认；不可静态判定 → 破坏特征扫描；其余自动放行。
             CommandAuthLevel.RULE_BASED -> {

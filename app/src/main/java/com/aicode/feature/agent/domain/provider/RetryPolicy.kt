@@ -169,7 +169,10 @@ private val TRANSIENT_MESSAGES = listOf(
 )
 
 /**
- * 对应 opencode 的 delay=500, factor=2, maxDelay=10000
+ * 对应 opencode 的 delay=500, factor=2, maxDelay=10000。
+ *
+ * 已不再作为重试等待的默认值（改为固定 [NETWORK_RETRY_DELAY_MILLIS]），保留供需要
+ * 长退避的场景（如多 Key 全部限流时的兜底）使用。
  */
 fun exponentialDelayMillis(retryIndex: Int): Long {
     val delay = 500L
@@ -178,6 +181,15 @@ fun exponentialDelayMillis(retryIndex: Int): Long {
     val wait = (delay * factor.pow(retryIndex)).toLong()
     return min(wait, maxDelay)
 }
+
+/**
+ * 网络类失败的重试间隔（毫秒）：**固定 3 秒**。
+ *
+ * 移动端网络抖动、中转站瞬时 5xx/重置通常 1~2 秒内即恢复，指数退避（0.5→1→2→4→8→10 秒）
+ * 与服务端常见的 `Retry-After: 23` 都只是让用户干等。统一按 3 秒重试，配合默认 6 次重试上限，
+ * 一次卡顿最多多花约 18 秒，而不是动辄半分钟以上。
+ */
+const val NETWORK_RETRY_DELAY_MILLIS = 3_000L
 
 /**
  * SSE 流中收到的 error 事件，携带错误码用于重试判定。
@@ -364,10 +376,17 @@ private fun isConnectionReset(e: IOException): Boolean {
  * 1. 秒数（如 `"30"`）→ 直接转为毫秒
  * 2. HTTP 日期（如 `"Fri, 29 Jun 2026 10:00:00 GMT"`）→ 计算距当前时间的差值
  *
- * 非 HttpException 或无 `Retry-After` 头部 → 返回 null。
- * 解析失败也返回 null（降级到指数退避）。
+ * 另：SSE 流内 error 事件（[StreamApiException]）可自带 [StreamApiException.retryAfterMillis]，
+ * 优先于 HTTP 头判定。
+ *
+ * 非上述类型或无 `Retry-After` 头部 → 返回 null。
+ * 解析失败也返回 null（降级到固定 [NETWORK_RETRY_DELAY_MILLIS]）。
  */
 fun extractRetryAfterMillis(t: Throwable): Long? {
+    // 流内 error 事件自带的服务端要求等待时间（SSE 场景下没有 HTTP 头可读）
+    if (t is StreamApiException) {
+        t.retryAfterMillis?.takeIf { it > 0 }?.let { return it }
+    }
     if (t !is HttpException) return null
     val header = t.response()?.headers()?.get("Retry-After") ?: return null
 
@@ -388,21 +407,20 @@ fun extractRetryAfterMillis(t: Throwable): Long? {
 }
 
 /**
- * 计算重试等待时间：优先使用服务端 `Retry-After` 头部指定的延迟，
- * 否则回退到指数退避 [exponentialDelayMillis]。
+ * 计算重试等待时间：**固定 [NETWORK_RETRY_DELAY_MILLIS]（3 秒）**。
  *
- * 对 429（速率限制）尤其重要——尊重服务端要求，避免频繁重试加剧限制。
+ * 服务端 `Retry-After` 只在它比 3 秒更短时才采纳；中转站常见的 `retry in 23s` 之类长值
+ * 一律按 3 秒重试——移动端等待 23 秒体验极差，而多数情况下服务端限制早已解除。
+ *
+ * @param retryIndex 保留参数，供未来需要区分首次/后续重试间隔时扩展。
  */
 fun retryDelayMillis(retryIndex: Int, error: Throwable): Long {
     val serverDelay = extractRetryAfterMillis(error)
     if (serverDelay != null && serverDelay > 0) {
-        return min(serverDelay, MAX_RETRY_AFTER_MILLIS)
+        return min(serverDelay, NETWORK_RETRY_DELAY_MILLIS)
     }
-    return exponentialDelayMillis(retryIndex)
+    return NETWORK_RETRY_DELAY_MILLIS
 }
-
-/** Retry-After 头部值的上限，防止服务端返回过大的值导致无限等待。 */
-private const val MAX_RETRY_AFTER_MILLIS = 60_000L
 
 /**
  * 在指数退避下重试 [block]（保持原方法名），用于非流式请求。

@@ -561,18 +561,31 @@ class ToolPermissionPolicyEngineTest {
     }
 
     @Test
-    fun fullAccess_unanalyzableDestructive_stillDenied() = runTest {
-        // 未开「禁用安全拦截」时，不可静态判定且疑似破坏性的命令仍被拦（可提权）
+    fun fullAccess_unanalyzableDestructive_isAllowed() = runTest {
+        // 「完全权限」按字面执行：灾难防护之外一律放行，不再有第二道兜底拦截
         val e = engine(level = CommandAuthLevel.FULL_ACCESS)
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("cat > /etc/passwd"), AgentMode.BUILD)
-        assertEquals(ToolPermissionPolicyEngine.Verdict.DENY, r.verdict)
-        assertTrue(r.denyReason?.contains("elevate") == true)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
     @Test
     fun fullAccess_safetyDisabled_allowsUnanalyzable() = runTest {
         val e = engine(level = CommandAuthLevel.FULL_ACCESS, safetyDisabled = true)
         val r = e.evaluate(tool(ToolCapability.EXECUTE_COMMANDS), "Bash", bash("cat > /etc/passwd"), AgentMode.BUILD)
+        assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
+    }
+
+    @Test
+    fun fullAccess_allowsNonDestructiveCommandWithStderrRedirect() = runTest {
+        // 回归：此前 looksDestructive 把任何含 `>` 的命令判成破坏性，
+        // 导致「不可静态判定 + 2>/dev/null」这类与删除无关的排查命令被硬拒绝。
+        val e = engine(level = CommandAuthLevel.FULL_ACCESS)
+        val r = e.evaluate(
+            tool(ToolCapability.EXECUTE_COMMANDS),
+            "Bash",
+            bash("cat $(find . -name '*.log') 2>/dev/null | head -50"),
+            AgentMode.BUILD
+        )
         assertEquals(ToolPermissionPolicyEngine.Verdict.ALLOW, r.verdict)
     }
 
