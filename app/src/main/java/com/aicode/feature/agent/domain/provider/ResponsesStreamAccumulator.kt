@@ -181,6 +181,27 @@ internal class ResponsesStreamAccumulator {
     var terminated = false
         private set
 
+    /** 断流降级标记：正文收到一部分但没等到终止事件，见 [markNetworkTruncated]。 */
+    private var networkTruncated = false
+
+    /** 已累积的正文长度，供日志与调用方判断断流时是否值得降级交付。 */
+    val textLength: Int get() = text.length
+
+    /** 断流时是否值得降级交付：正文非空才算（只收到思考/工具名时降级没有意义）。 */
+    fun hasSalvageableText(): Boolean = text.isNotBlank()
+
+    /**
+     * 断流降级：正文已经收到一部分、连接却先断了（对端 EOF / 代理提前断开 / 网络切换）。
+     *
+     * 置位后 [toResponse] 把这批内容标成截断输出（stopReason=length，[AIResponse.isTruncated]
+     * 为真 → Agent 循环自动续写），好过让整轮判成失败、已流过的内容全部作废。
+     */
+    fun markNetworkTruncated() {
+        if (terminated) return
+        networkTruncated = true
+        terminated = true
+    }
+
     /** 处理一个 SSE data 行解析出的事件对象，返回本次事件带来的增量文本（无则 null）。 */
     fun accept(event: JsonObject): ResponsesDelta? {
         when (event.str("type")) {
@@ -278,6 +299,8 @@ internal class ResponsesStreamAccumulator {
     fun toResponse(): AIResponse {
         val streamed = calls.values
             .filter { it.callId.isNotEmpty() || it.name.isNotEmpty() }
+            // 断流时入参几乎必然半截：残缺参数去执行工具（写文件/跑命令）风险远大于丢掉这次调用。
+            .filter { !networkTruncated || looksLikeCompleteJsonObject(it.args.toString()) }
             .map { ToolCall(id = it.callId, name = it.name, arguments = parseToolArguments(it.args.toString())) }
         val toolCalls = streamed + finalCalls.filter { call ->
             streamed.none { it.id == call.id && call.id.isNotEmpty() }
@@ -285,7 +308,7 @@ internal class ResponsesStreamAccumulator {
         return AIResponse(
             content = text.toString(),
             toolCalls = toolCalls,
-            stopReason = responsesStopReason(status, incompleteReason, toolCalls.isNotEmpty()),
+            stopReason = if (networkTruncated) STREAM_TRUNCATED_STOP_REASON else responsesStopReason(status, incompleteReason, toolCalls.isNotEmpty()),
             reasoning = reasoning.toString().takeIf { it.isNotEmpty() },
             thinkingBlocksJson = thinkingBlocksSnapshotJson,
             inputTokens = usage.inputTokens,

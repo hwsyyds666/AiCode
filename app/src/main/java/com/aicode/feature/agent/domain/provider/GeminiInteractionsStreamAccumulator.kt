@@ -184,6 +184,24 @@ internal class GeminiInteractionsStreamAccumulator {
     var terminated = false
         private set
 
+    /**
+     * 流在终态前被切断（对端 EOF / 代理提前关连接 / 网络切换），且已有正文可降级交付。
+     * 与 [terminated] 互斥：到过终态就不会置位。
+     */
+    var truncatedByNetwork = false
+        private set
+
+    /** 断流后由调用方置位；已到终态则忽略（正常结束，不该标截断）。 */
+    fun markTruncatedByNetwork() {
+        if (!terminated) truncatedByNetwork = true
+    }
+
+    /** 已累积正文的长度，供调用方判断断流时是否值得降级交付。 */
+    val streamedTextLength: Int
+        get() = steps.values.sumOf { acc ->
+            if (acc.effectiveType() == InteractionStep.MODEL_OUTPUT) acc.text.length else 0
+        }
+
     /** 处理一个 SSE data 行解析出的事件对象，返回本次事件带来的增量文本（无则 null）。 */
     fun accept(event: JsonObject): InteractionsDelta? {
         // usage 可能挂在任意事件的 metadata 上，先无条件吸一次。
@@ -307,10 +325,12 @@ internal class GeminiInteractionsStreamAccumulator {
         val toolCalls = streamed.toolCalls.ifEmpty { finalOutput?.toolCalls.orEmpty() }
         // 流式下图片整块到达（含 step.start 的完整载荷），不产生流式增量；终止事件里还有兜底解析。
         val images = streamed.images.ifEmpty { finalOutput?.images.orEmpty() }
+        // 断流降级：把 stopReason 标成 length，让 Agent 循环自动续写，而不是把整轮判成失败。
+        val truncated = truncatedByNetwork && status !in TERMINAL_STATUSES
         return AIResponse(
             content = streamed.text.ifEmpty { finalOutput?.text.orEmpty() },
             toolCalls = toolCalls,
-            stopReason = interactionStopReason(status),
+            stopReason = if (truncated) STREAM_TRUNCATED_STOP_REASON else interactionStopReason(status),
             stopDetail = statusDetail,
             reasoning = streamed.reasoning.ifEmpty { finalOutput?.reasoning.orEmpty() }.takeIf { it.isNotEmpty() },
             thinkingBlocksJson = streamed.stepsSnapshotJson ?: finalOutput?.stepsSnapshotJson,
@@ -351,6 +371,13 @@ internal class GeminiInteractionsStreamAccumulator {
 
                 InteractionStep.FUNCTION_CALL -> {
                     if (acc.name.isEmpty()) return@forEach
+                    // 断流时入参几乎必然停在半截 JSON：带着残缺参数去执行工具（写文件、跑命令）
+                    // 比丢掉这次调用危险得多，只保留能解析成完整对象的调用。
+                    if (truncatedByNetwork && acc.argsDelta.isNotEmpty() &&
+                        parseArgsOrNull(acc.argsDelta.toString()) == null
+                    ) {
+                        return@forEach
+                    }
                     val callId = acc.id.ifEmpty { acc.name }
                     val args = acc.arguments()
                     toolCalls.add(ToolCall(id = callId, name = acc.name, arguments = args))

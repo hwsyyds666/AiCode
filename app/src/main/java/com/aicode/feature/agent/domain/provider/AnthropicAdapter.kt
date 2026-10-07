@@ -197,6 +197,10 @@ class AnthropicAdapter @Inject constructor(
             val toolBlocks = LinkedHashMap<Int, ToolBlockAcc>()
             var stopReason: String? = null
             var stopDetail: String? = null
+            // 未收到 message_stop 就到了流尾（对端 EOF / 代理提前断开 / 网络切换）。
+            // 已有正文时降级交付而不是整轮失败，详见 [logStreamTruncated]。
+            var truncatedByNetwork = false
+            var sseLines = 0
             var streamInputTokens = 0
             var streamOutputTokens = 0
             var streamCachedInputTokens = 0
@@ -216,14 +220,23 @@ class AnthropicAdapter @Inject constructor(
                 }
                 try {
                     val reader = rb.charStream().buffered()
-                    // 收到服务端 message_stop 事件即 break 正常结束；readLine() 返回 null 则视为
-                    // 流被异常截断（网络中断/TCP 重置/readTimeout），必须抛异常让重试/日志接管——
-                    // 否则原本会用截断数据「正常完成」，表现为 AI 突然中断且无任何错误日志。
-                    // （收到 message_stop 即 break，故走到 readLine()==null 时必然未收到过结束标记。）
+                    // 收到服务端 message_stop 事件即 break 正常结束；readLine() 返回 null 说明
+                    // 结束标记还没到、连接就没了（网络中断/TCP 重置/代理提前断开）。
+                    // 只有正文还没收到时才抛异常让重试/日志接管——那时重发既安全又可能拿到完整回答；
+                    // 已经吐了字就降级交付（标记截断输出，由 Agent 循环自动续写），
+                    // 否则用户会看到整轮失败、之前流过的内容全部作废。
                     while (true) {
                         coroutineContext.ensureActive()
                         val line = reader.readLine()
-                            ?: throw IOException("SSE 流被中断：未收到 message_stop 结束标记（疑似网络断开）")
+                        if (line == null) {
+                            if (!textBuilder.isSalvageableAfterTruncation()) {
+                                throw IOException("SSE 流被中断：未收到 message_stop 结束标记（疑似网络断开）")
+                            }
+                            truncatedByNetwork = true
+                            logStreamTruncated("Anthropic", textBuilder.length, sseLines)
+                            break
+                        }
+                        sseLines++
                         idleWatchdog.touch()
                         if (!line.startsWith("data:")) continue
                         val data = line.removePrefix("data:").trim()
@@ -371,10 +384,13 @@ class AnthropicAdapter @Inject constructor(
                 }
             }
 
-            val toolCalls = toolBlocks.values.map { acc ->
-                ToolCall(id = acc.id, name = acc.name, arguments = parseArgs(acc.args.toString()))
-            }
-            emit(AIStreamChunk.Final(AIResponse(content = textBuilder.toString(), toolCalls = toolCalls, stopReason = stopReason, stopDetail = stopDetail, signature = signature, thinkingBlocksJson = encodeThinkingBlocks(thinkingBlocks.values.map { it.toBlock() }), inputTokens = totalInputTokens(streamInputTokens, streamCachedInputTokens, streamCacheCreationTokens), outputTokens = streamOutputTokens, cachedInputTokens = streamCachedInputTokens, cacheCreationTokens = streamCacheCreationTokens)))
+            val toolCalls = toolBlocks.values
+                // 断流时入参几乎必然半截，残缺参数去执行工具（写文件/跑命令）风险远大于丢掉这次调用。
+                .filter { !truncatedByNetwork || looksLikeCompleteJsonObject(it.args.toString()) }
+                .map { acc ->
+                    ToolCall(id = acc.id, name = acc.name, arguments = parseArgs(acc.args.toString()))
+                }
+            emit(AIStreamChunk.Final(AIResponse(content = textBuilder.toString(), toolCalls = toolCalls, stopReason = if (truncatedByNetwork) STREAM_TRUNCATED_STOP_REASON else stopReason, stopDetail = stopDetail, signature = signature, thinkingBlocksJson = encodeThinkingBlocks(thinkingBlocks.values.map { it.toBlock() }), inputTokens = totalInputTokens(streamInputTokens, streamCachedInputTokens, streamCacheCreationTokens), outputTokens = streamOutputTokens, cachedInputTokens = streamCachedInputTokens, cacheCreationTokens = streamCacheCreationTokens)))
                     }
                 },
                 onRetry = { attempt, max, error -> emit(AIStreamChunk.Retrying(attempt, max, error)) }

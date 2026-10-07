@@ -221,6 +221,10 @@ class GeminiAdapter @Inject constructor(
                 // model 轮的 parts 原样快照：文本分片按段合并，functionCall 与 thoughtSignature 原样保留。
                 val snapshotParts = mutableListOf<JsonObject>()
                 var currentFinishReason: String? = null
+                // 未等到 finishReason 就到了流尾（对端 EOF / 代理提前断开 / 网络切换）；
+                // 已有正文时降级交付而不是整轮失败，详见 [logStreamTruncated]。
+                var truncatedByNetwork = false
+                var sseLines = 0
                 var streamInputTokens = 0
                 var streamOutputTokens = 0
                 var streamCachedInputTokens = 0
@@ -235,10 +239,21 @@ class GeminiAdapter @Inject constructor(
                     }
                     try {
                         val reader = rb.charStream().buffered()
+                        // 收到 finishReason 即 break 正常结束；readLine() 返回 null 说明它还没到、
+                        // 连接就没了。只有正文还没收到时才抛异常让重试/日志接管；已经吐了字就降级交付
+                        // （标记截断输出，由 Agent 循环自动续写），避免整轮失败、已流出内容全部作废。
                         while (true) {
                             coroutineContext.ensureActive()
                             val line = reader.readLine()
-                                ?: throw IOException("SSE 流被中断（疑似网络断开）")
+                            if (line == null) {
+                                if (!textBuilder.isSalvageableAfterTruncation()) {
+                                    throw IOException("SSE 流被中断（疑似网络断开）")
+                                }
+                                truncatedByNetwork = true
+                                logStreamTruncated("Gemini", textBuilder.length, sseLines)
+                                break
+                            }
+                            sseLines++
                             idleWatchdog.touch()
                             if (!line.startsWith("data:")) continue
                             val data = line.removePrefix("data:").trim()
@@ -320,7 +335,9 @@ class GeminiAdapter @Inject constructor(
                     }
                 }
 
-                emit(AIStreamChunk.Final(AIResponse(content = textBuilder.toString(), toolCalls = toolCalls, stopReason = currentFinishReason, thinkingBlocksJson = snapshotOf(snapshotParts), inputTokens = streamInputTokens, outputTokens = streamOutputTokens, cachedInputTokens = streamCachedInputTokens, images = images)))
+                // 断流降级时把 stopReason 标记为 length，让 Agent 循环自动续写而不是判整轮失败。
+                val truncated = truncatedByNetwork && currentFinishReason == null
+                emit(AIStreamChunk.Final(AIResponse(content = textBuilder.toString(), toolCalls = toolCalls, stopReason = if (truncated) STREAM_TRUNCATED_STOP_REASON else currentFinishReason, thinkingBlocksJson = snapshotOf(snapshotParts), inputTokens = streamInputTokens, outputTokens = streamOutputTokens, cachedInputTokens = streamCachedInputTokens, images = images)))
                     }
                 },
                 onRetry = { attempt, max, error -> emit(AIStreamChunk.Retrying(attempt, max, error)) }
@@ -483,10 +500,21 @@ class GeminiAdapter @Inject constructor(
                         }
                         try {
                             val reader = rb.charStream().buffered()
+                            var sseLines = 0
+                            // 与 generateContent 同策略：没到终态就连没了，只有正文还没收到时才抛
+                            // 异常让重试接管；已经吐了字就降级交付（标记截断，由 Agent 循环续写）。
                             while (!acc.terminated) {
                                 coroutineContext.ensureActive()
                                 val line = reader.readLine()
-                                    ?: throw IOException("SSE 流被中断：interaction 未到终态（疑似网络断开）")
+                                if (line == null) {
+                                    if (acc.streamedTextLength <= 0) {
+                                        throw IOException("SSE 流被中断：interaction 未到终态（疑似网络断开）")
+                                    }
+                                    acc.markTruncatedByNetwork()
+                                    logStreamTruncated("Gemini/Interactions", acc.streamedTextLength, sseLines)
+                                    break
+                                }
+                                sseLines++
                                 idleWatchdog.touch()
                                 if (!line.startsWith("data:")) continue
                                 val data = line.removePrefix("data:").trim()
